@@ -1,7 +1,6 @@
 MAKEFLAGS += --no-print-directory
 
-CC = g++
-FLAGS = -Wall -g -std=c++17
+CC = g++ -Wall -g -std=c++17
 
 TARGETS = $(patsubst %/, %, $(filter %/, $(wildcard */)))
 
@@ -20,5 +19,4 @@ test_target:
 	@[ -n "$(TARGET)" ] || (echo "usage: make test_target TARGET=<target>" && false)
 	@$(CC) $(TARGET)/test.cc
 	@./a.out
-	@rm -rf a.out
 	@echo "all tests passed for $(TARGET)"

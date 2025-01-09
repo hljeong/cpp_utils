@@ -46,11 +46,11 @@ template <typename T> std::string repr(const std::vector<T> &value) {
   return s.str();
 }
 
-template <typename... Ts, std::size_t... Idx>
-std::string repr(const std::tuple<Ts...> &value, std::index_sequence<Idx...>) {
+template <typename... Ts, std::size_t... Is>
+std::string repr(const std::tuple<Ts...> &value, std::index_sequence<Is...>) {
   std::stringstream s;
   s << "(";
-  ((s << (Idx ? ", " : "") << repr(std::get<Idx>(value))), ...);
+  ((s << (Is ? ", " : "") << repr(std::get<Is>(value))), ...);
   s << ")";
   return s.str();
 }
