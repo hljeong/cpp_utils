@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <sstream>
 #include <string>
 #include <tuple>
@@ -56,6 +57,12 @@ std::string repr(const std::tuple<Ts...> &value, std::index_sequence<Idx...>) {
 
 template <typename... Ts> std::string repr(const std::tuple<Ts...> &value) {
   return repr(value, std::index_sequence_for<Ts...>());
+}
+
+inline std::string repr(const std::nullopt_t &) { return "std::nullopt"; }
+
+template <typename T> std::string repr(const std::optional<T> &value) {
+  return value ? repr(*value) : "std::nullopt";
 }
 
 }; // namespace fmt

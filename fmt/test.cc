@@ -1,5 +1,4 @@
 #include <cassert>
-#include <iostream>
 
 #include "fmt.h"
 
@@ -22,4 +21,8 @@ int main() {
   assert(repr(std::make_tuple()) == "()");
 
   assert(repr(std::make_tuple(2, "hi")) == "(2, \"hi\")");
+
+  assert(repr(std::nullopt) == "std::nullopt");
+
+  assert(repr(std::optional<int8_t>(-2)) == "-2");
 }
