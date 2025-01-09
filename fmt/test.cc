@@ -2,9 +2,9 @@
 
 #include "fmt.h"
 
-int main() {
-  using namespace fmt;
+using namespace fmt;
 
+int main() {
   assert(repr(3) == "3");
 
   assert(repr(true) == "true");
