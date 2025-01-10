@@ -4,25 +4,60 @@
 
 using namespace fmt;
 
+void assert_eq(std::string value, const char *expected) {
+  if (value != expected) {
+    printf("expected: %s, got: %s\n", expected, value.c_str());
+  }
+  assert(value == expected);
+}
+
+template <typename T> void test(T value, const char *expected) {
+  assert_eq(repr(value), expected);
+}
+
+template <std::size_t N>
+void test(const char (&value)[N], const char *expected) {
+  assert_eq(repr(value), expected);
+}
+
 int main() {
-  assert(repr(3) == "3");
+  test(3, "3");
 
-  assert(repr(true) == "true");
+  test('x', "'x'");
 
-  assert(repr(false) == "false");
+  test(static_cast<unsigned char>(2), "2");
 
-  assert(repr("hello") == "\"hello\"");
+  test(static_cast<signed char>(-2), "-2");
 
-  assert(repr(std::string("world")) == "\"world\"");
+  test(static_cast<unsigned short>(300), "300");
 
-  assert(repr(std::vector<std::string>{"a", "b", "c"}) ==
-         "[\"a\", \"b\", \"c\"]");
+  test(static_cast<short>(-300), "-300");
 
-  assert(repr(std::make_tuple()) == "()");
+  test(true, "true");
 
-  assert(repr(std::make_tuple(2, "hi")) == "(2, \"hi\")");
+  test(false, "false");
 
-  assert(repr(std::nullopt) == "std::nullopt");
+  test("hello literal", "\"hello literal\"");
 
-  assert(repr(std::optional<int8_t>(-2)) == "-2");
+  test(static_cast<const char *>("hello"), "\"hello\"");
+
+  test(std::string("world"), "\"world\"");
+
+  test(std::vector<std::string>{"a", "b", "c"}, "[\"a\", \"b\", \"c\"]");
+
+  test(std::tuple<>(), "()");
+
+  test(std::tuple<uint32_t, std::string>(2, "hi"), "(2, \"hi\")");
+
+  test(std::nullopt, "std::nullopt");
+
+  test<std::optional<bool>>(std::nullopt, "std::nullopt");
+
+  test(std::tuple<std::optional<uint32_t>>(std::nullopt), "(std::nullopt)");
+
+  test(std::tuple<std::vector<uint32_t>>({{2}}), "([2])");
+
+  test(std::tuple<std::vector<int8_t>, std::optional<bool>, std::string,
+                  uint32_t>{{-1, -2, 3, 4}, std::nullopt, "hi", 12},
+       "([-1, -2, 3, 4], std::nullopt, \"hi\", 12)");
 }
