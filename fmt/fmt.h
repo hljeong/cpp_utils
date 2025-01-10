@@ -11,15 +11,6 @@
 
 namespace fmt {
 
-// // this is cheating, also floods compile errors
-// template <typename T> std::string repr(const T &value) {
-//   std::stringstream s;
-//
-//   s << value;
-//
-//   return s.str();
-// }
-
 // todo: move this out
 // see: https://stackoverflow.com/a/20170989
 template <typename T> std::string type_name() {
@@ -177,15 +168,11 @@ template <typename... Ts> std::string repr(const std::tuple<Ts...> &value) {
 
     s << "(";
 
-    // std::size_t idx_ = 0;
-    // (printf("decltype(value[%lu]) = %s\n", idx_++,
-    //         type_name<decltype(value)>().c_str()),
-    //  ...);
-
     std::size_t idx = 0;
     ((s << (idx++ ? ", " : ""), s << patch_repr(value)), ...);
 
     s << ")";
+
     return s.str();
   };
 
@@ -197,7 +184,6 @@ template <> inline std::string repr<std::nullopt_t>(const std::nullopt_t &) {
 }
 
 template <typename T> std::string repr(const std::optional<T> &value) {
-  // printf("calling repr<std::optional<%s>>()\n", type_name<T>().c_str());
   return value ? repr(*value) : "std::nullopt";
 }
 
