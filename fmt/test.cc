@@ -60,4 +60,6 @@ int main() {
   test(std::tuple<std::vector<int8_t>, std::optional<bool>, std::string,
                   uint32_t>{{-1, -2, 3, 4}, std::nullopt, "hi", 12},
        "([-1, -2, 3, 4], std::nullopt, \"hi\", 12)");
+
+  test(std::string_view("view"), "\"view\"");
 }

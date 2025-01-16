@@ -123,6 +123,11 @@ template <> inline std::string repr<std::string>(const std::string &value) {
   return "\"" + value + "\"";
 }
 
+template <>
+inline std::string repr<std::string_view>(const std::string_view &value) {
+  return repr(std::string(value));
+}
+
 template <typename T> std::string repr(const std::vector<T> &value) {
   std::stringstream s;
 
