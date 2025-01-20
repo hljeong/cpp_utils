@@ -1,4 +1,5 @@
-#pragma once
+#ifndef FMT_H
+#define FMT_H
 
 #include <cxxabi.h>
 #include <memory>
@@ -192,4 +193,8 @@ template <typename T> std::string repr(const std::optional<T> &value) {
   return value ? repr(*value) : "std::nullopt";
 }
 
+// todo: repr<std::variant<Ts...>>
+
 }; // namespace fmt
+
+#endif

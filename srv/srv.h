@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SRV_H
+#define SRV_H
 
 #include <atomic>
 #include <thread>
@@ -71,3 +72,5 @@ private:
 };
 
 }; // namespace srv
+
+#endif
