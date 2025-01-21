@@ -4,11 +4,17 @@
 #include <algorithm>
 #include <variant>
 
+#include "../sum/sum.h"
+
 namespace res {
 
 template <typename T> class Wraps {
 public:
-  explicit constexpr Wraps(T value) : value(std::move(value)) {};
+  constexpr Wraps(T value) : value(std::move(value)) {};
+
+  constexpr Wraps(Wraps<T> &&) = default;
+
+  constexpr Wraps &operator=(Wraps<T> &&) = default;
 
   constexpr T &&move() { return static_cast<T &&>(value); }
 
@@ -25,29 +31,27 @@ public:
   explicit constexpr Err(T value) : Wraps<T>(std::move(value)) {}
 };
 
-template <typename T, typename E> class Result {
+template <typename T, typename E>
+class Result : public sum::OneOf<Ok<T>, Err<E>> {
 public:
-  using Variant = std::variant<Ok<T>, Err<E>>;
+  using Base = sum::OneOf<Ok<T>, Err<E>>;
 
-  constexpr Result(Ok<T> value) : m_value(std::move(value)) {}
+  constexpr Result(Ok<T> value) : Base(std::move(value)) {}
 
-  constexpr Result(Err<E> value) : m_value(std::move(value)) {}
+  constexpr Result(Err<E> value) : Base(std::move(value)) {}
 
-  constexpr bool is_ok() const {
-    return std::holds_alternative<Ok<T>>(m_value);
-  }
+  constexpr bool is_ok() const { return Base::template is<Ok<T>>(); }
 
-  constexpr bool is_err() const {
-    return std::holds_alternative<Err<E>>(m_value);
-  }
+  constexpr bool is_err() const { return Base::template is<Err<E>>(); }
 
-  constexpr T ok() const { return std::get<Ok<T>>(m_value).value; }
+  constexpr T ok() const { return Base::template get<Ok<T>>(); }
 
-  constexpr E err() const { return std::get<Err<E>>(m_value).value; }
+  constexpr E err() const { return Base::template get<Err<E>>(); }
 
-  constexpr T &&move_ok() { return std::get<Ok<T>>(m_value).move(); }
+  // todo: figure out why get<Ok<T>>().move() doesnt work
+  constexpr T &&move_ok() { return Base::template move<Ok<T>>().move(); }
 
-  constexpr E &&move_err() { return std::get<Err<E>>(m_value).move(); }
+  constexpr E &&move_err() { return Base::template move<Err<E>>().move(); }
 
   // for potentially better syntax, see: https://github.com/BowenFu/matchit.cpp
   template <typename R>
@@ -62,9 +66,6 @@ public:
   void match_do(std::function<void(T)> f_ok, std::function<void(E)> f_err) {
     match<void>(f_ok, f_err);
   }
-
-private:
-  Variant m_value;
 };
 
 }; // namespace res
