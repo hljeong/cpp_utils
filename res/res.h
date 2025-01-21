@@ -6,6 +6,13 @@
 
 namespace res {
 
+// heavily inspired by: https://yegor.pomortsev.com/post/result-type/
+// see also:
+// - https://doc.rust-lang.org/book/ch09-02-recoverable-errors-with-result.html
+// - https://en.cppreference.com/w/cpp/utility/expected
+// - https://github.com/BowenFu/matchit.cpp
+// - https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2019/p1371r1.pdf
+
 template <typename T> class Wraps {
 public:
   explicit constexpr Wraps(T value) : value(std::move(value)) {};
