@@ -6,28 +6,23 @@
 
 namespace res {
 
-// heavily inspired by: https://yegor.pomortsev.com/post/result-type/
-// see also:
-// - https://doc.rust-lang.org/book/ch09-02-recoverable-errors-with-result.html
-// - https://en.cppreference.com/w/cpp/utility/expected
-// - https://github.com/BowenFu/matchit.cpp
-// - https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2019/p1371r1.pdf
-
 template <typename T> class Wraps {
 public:
   explicit constexpr Wraps(T value) : value(std::move(value)) {};
+
+  constexpr T &&move() { return static_cast<T &&>(value); }
 
   T value;
 };
 
 template <typename T> class Ok : public Wraps<T> {
 public:
-  explicit constexpr Ok(T value) : Wraps<T>(value) {}
+  explicit constexpr Ok(T value) : Wraps<T>(std::move(value)) {}
 };
 
 template <typename T> class Err : public Wraps<T> {
 public:
-  explicit constexpr Err(T value) : Wraps<T>(value) {}
+  explicit constexpr Err(T value) : Wraps<T>(std::move(value)) {}
 };
 
 template <typename T, typename E> class Result {
@@ -50,13 +45,17 @@ public:
 
   constexpr E err() const { return std::get<Err<E>>(m_value).value; }
 
+  constexpr T &&move_ok() { return std::get<Ok<T>>(m_value).move(); }
+
+  constexpr E &&move_err() { return std::get<Err<E>>(m_value).move(); }
+
   // for potentially better syntax, see: https://github.com/BowenFu/matchit.cpp
   template <typename R>
   R match(std::function<R(T)> f_ok, std::function<R(E)> f_err) {
     if (is_ok()) {
-      return f_ok(ok());
+      return f_ok(move_ok());
     } else {
-      return f_err(err());
+      return f_err(move_err());
     }
   }
 
