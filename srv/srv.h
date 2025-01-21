@@ -39,7 +39,11 @@ public:
   AutoDispatch(Dispatcher &&dispatcher)
       : AutoDispatch(std::move(dispatcher), std::chrono::seconds(0)) {}
 
-  virtual ~AutoDispatch() { stop(); }
+  virtual ~AutoDispatch() noexcept { stop(); }
+
+  AutoDispatch(AutoDispatch<Dispatcher> &&other) noexcept = default;
+
+  AutoDispatch &operator=(AutoDispatch<Dispatcher> &&other) noexcept = default;
 
   const Dispatcher &operator*() const { return m_dispatcher; }
 
