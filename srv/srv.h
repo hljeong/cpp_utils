@@ -8,8 +8,8 @@ namespace srv {
 
 template <typename Dispatcher> class AutoDispatch {
 public:
-  AutoDispatch(std::unique_ptr<Dispatcher> dispatcher,
-               std::chrono::seconds timeout, std::chrono::milliseconds interval)
+  AutoDispatch(Dispatcher &&dispatcher, std::chrono::seconds timeout,
+               std::chrono::milliseconds interval)
       : m_dispatcher(std::move(dispatcher)) {
     using namespace std::chrono;
     using namespace std::this_thread;
@@ -18,37 +18,36 @@ public:
     const auto end = steady_clock::now() + timeout;
     m_thread = std::thread([=]() {
       while (!m_signal_stop && (live_forever || steady_clock::now() < end)) {
-        m_dispatcher->dispatch();
+        m_dispatcher.dispatch();
         sleep_for(interval);
       }
     });
   }
 
   template <typename Timeout, typename Interval>
-  AutoDispatch(std::unique_ptr<Dispatcher> dispatcher, Timeout timeout,
-               Interval interval)
+  AutoDispatch(Dispatcher &&dispatcher, Timeout timeout, Interval interval)
       : AutoDispatch(
-            dispatcher,
+            std::move(dispatcher),
             std::chrono::duration_cast<std::chrono::seconds>(timeout),
             std::chrono::duration_cast<std::chrono::milliseconds>(interval)) {}
 
   template <typename Interval>
-  AutoDispatch(std::unique_ptr<Dispatcher> dispatcher, Interval timeout)
+  AutoDispatch(Dispatcher &&dispatcher, Interval timeout)
       : AutoDispatch(std::move(dispatcher), timeout,
                      std::chrono::milliseconds(50)) {}
 
-  AutoDispatch(std::unique_ptr<Dispatcher> dispatcher)
+  AutoDispatch(Dispatcher &&dispatcher)
       : AutoDispatch(std::move(dispatcher), std::chrono::seconds(0)) {}
 
   virtual ~AutoDispatch() { stop(); }
 
-  const Dispatcher &operator*() const { return *m_dispatcher; }
+  const Dispatcher &operator*() const { return m_dispatcher; }
 
-  Dispatcher &operator*() { return *m_dispatcher; }
+  Dispatcher &operator*() { return m_dispatcher; }
 
-  const Dispatcher *operator->() const { return m_dispatcher.get(); }
+  const Dispatcher *operator->() const { return &m_dispatcher; }
 
-  Dispatcher *operator->() { return m_dispatcher.get(); }
+  Dispatcher *operator->() { return &m_dispatcher; }
 
   void signal_stop() { m_signal_stop = true; }
 
@@ -66,7 +65,7 @@ public:
   }
 
 private:
-  std::unique_ptr<Dispatcher> m_dispatcher;
+  Dispatcher m_dispatcher;
   std::thread m_thread;
   std::atomic_bool m_signal_stop = false;
 };
