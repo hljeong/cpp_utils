@@ -35,6 +35,6 @@ private:
   Variant m_value;
 };
 
-}; // namespace sum
+} // namespace sum
 
 #endif

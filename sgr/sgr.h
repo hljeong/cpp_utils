@@ -11,6 +11,6 @@ template <typename... Ts> struct overloads : Ts... {
 // deduction guide needed pre-c++20: https://stackoverflow.com/a/75699136
 template <typename... Ts> overloads(Ts...) -> overloads<Ts...>;
 
-}; // namespace sgr
+} // namespace sgr
 
 #endif

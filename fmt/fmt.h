@@ -32,9 +32,9 @@ template <typename T> std::string type_name() {
   }
 
   if (std::is_lvalue_reference_v<T>) {
-    r += "&";
+    r += " &";
   } else if (std::is_rvalue_reference_v<T>) {
-    r += "&&";
+    r += " &&";
   }
 
   return r;
@@ -195,6 +195,6 @@ template <typename T> std::string repr(const std::optional<T> &value) {
 
 // todo: repr<std::variant<Ts...>>
 
-}; // namespace fmt
+} // namespace fmt
 
 #endif

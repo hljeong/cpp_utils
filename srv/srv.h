@@ -74,6 +74,6 @@ private:
   std::atomic_bool m_signal_stop = false;
 };
 
-}; // namespace srv
+} // namespace srv
 
 #endif

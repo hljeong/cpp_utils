@@ -68,6 +68,6 @@ public:
   }
 };
 
-}; // namespace res
+} // namespace res
 
 #endif
