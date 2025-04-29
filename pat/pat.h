@@ -24,9 +24,9 @@ public:
   // Match any of
   template <typename... Ts,
             std::enable_if_t<(std::is_same_v<T, Ts> && ...), bool> = true>
-  Match(const T &value, const Ts &...rest)
-      : Match([value, rest_match = Match<T>(rest...)](const T &value_) {
-          return (value == value_) || rest_match.match(value_);
+  Match(const T &match, const Ts &...rest)
+      : Match([match, rest_match = Match<T>(rest...)](const T &value) {
+          return (value == match) || rest_match.match(value);
         }) {}
 
   // Match anything
@@ -50,13 +50,13 @@ public:
       typename... Ts_,
       std::enable_if_t<(sizeof...(Ts) == 1) && (std::is_same_v<T0, Ts_> && ...),
                        bool> = true>
-  Pattern(const Ts_ &...values) : Pattern(Match<T0>(values...)) {}
+  Pattern(const Ts_ &...pattern) : Pattern(Match<T0>(pattern...)) {}
 
   // Match anything
   Pattern(Any) : m_is_any(true) {}
 
-  bool match(const Ts &...args) const {
-    return match(std::index_sequence_for<Ts...>(), args...);
+  bool match(const Ts &...values) const {
+    return match(std::index_sequence_for<Ts...>(), values...);
   }
 
 private:
@@ -71,47 +71,49 @@ private:
   }
 };
 
-template <typename V, typename... Ts> struct PatternValue {
+template <typename R, typename... Ts> struct PatternResult {
   const Pattern<Ts...> pattern;
-  const V value;
+  const R result;
 };
 
-template <typename V = void, typename... Ts>
-std::function<V(const std::vector<PatternValue<V, Ts...>> &)>
-match(const Ts &...args, const V &default_value) {
-  return [&](const auto &pattern_values) {
-    for (const auto &[pattern, value] : pattern_values) {
-      if (pattern.match(args...)) {
-        return value;
+template <typename R = void, typename... Ts>
+std::function<R(const std::vector<PatternResult<R, Ts...>> &)>
+match(const Ts &...values, const R &default_result) {
+  return [&](const auto &pattern_results) {
+    for (const auto &[pattern, result] : pattern_results) {
+      if (pattern.match(values...)) {
+        return result;
       }
     }
-    return default_value;
+    return default_result;
   };
 }
 
-template <typename V = void, typename... Ts>
-std::function<V(const std::vector<PatternValue<V, Ts...>> &)>
-match(const Ts &...args) {
-  return [&](const auto &pattern_values) {
-    for (const auto &[pattern, value] : pattern_values) {
-      if (pattern.match(args...)) {
-        return value;
+template <typename R = void, typename... Ts>
+std::function<R(const std::vector<PatternResult<R, Ts...>> &)>
+match(const Ts &...values) {
+  return [&](const auto &pattern_results) {
+    for (const auto &[pattern, result] : pattern_results) {
+      if (pattern.match(values...)) {
+        return result;
       }
     }
     throw std::invalid_argument("no match");
   };
 }
 
-template <typename V = void, typename... Ts>
-auto match_do(const Ts &...args, const V &default_value) {
+template <typename R = void, typename... Ts>
+auto match_do(const Ts &...values, const R &default_result) {
   return [&](const auto &pattern_actions) {
-    return match<std::function<V()>>(args...)(pattern_actions, default_value)();
+    return match<std::function<R()>>(values...)(pattern_actions,
+                                                default_result)();
   };
 }
 
-template <typename V = void, typename... Ts> auto match_do(const Ts &...args) {
+template <typename R = void, typename... Ts>
+auto match_do(const Ts &...values) {
   return [&](const auto &pattern_actions) {
-    return match<std::function<V()>>(args...)(pattern_actions)();
+    return match<std::function<R()>>(values...)(pattern_actions)();
   };
 }
 
