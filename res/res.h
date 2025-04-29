@@ -1,3 +1,5 @@
+// "result"
+
 #ifndef RES_H
 #define RES_H
 

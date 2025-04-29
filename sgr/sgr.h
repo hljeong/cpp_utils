@@ -1,3 +1,5 @@
+// "syntactic sugar"
+
 #ifndef SGR_H
 #define SGR_H
 

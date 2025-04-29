@@ -1,3 +1,5 @@
+// "sum type"
+
 #ifndef SUM_H
 #define SUM_H
 
