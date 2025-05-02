@@ -7,10 +7,13 @@
 #include <memory>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <type_traits>
 #include <vector>
+
+#include "../cpy/cpy.h"
 
 namespace fmt {
 
@@ -41,19 +44,64 @@ template <typename T> std::string type_name() {
 
   return r;
 }
+template <typename T> inline std::string repr(const T &);
 
-// todo: move this out to extra_type_traits.h or smth
-template <typename T>
-struct remove_cvref : std::remove_cv<std::remove_reference_t<T>> {};
+template <typename T> inline std::string str(const T &value);
 
-template <typename T> using remove_cvref_t = typename remove_cvref<T>::type;
+inline void prints(const std::string &s) { printf("%s", s.c_str()); }
 
-template <typename T> std::string repr(const T &) {
-  return "<could not repr: " + type_name<T>() + ">";
+inline std::string format(const std::string &s) { return s; }
+
+template <typename T, typename... Ts>
+inline std::string format(const std::string &s, const T &value,
+                          const Ts &...rest) {
+  bool flag = false;
+  for (const auto &[i, c] : cpy::enumerate(s)) {
+    switch (c) {
+    case '{': {
+      flag = !flag;
+      break;
+    }
+    case '}': {
+      if (flag) {
+        // todo: this implementation is wrong. escaped braces are not resolved
+        auto s_ = s.substr(0, i - 1) + str(value) + s.substr(i + 1);
+        return format(s_, rest...);
+      } else if (!(i + 1 < s.size() && s[i + 1] == '}')) {
+        throw std::invalid_argument(format("invalid format string: \"{}\"", s));
+      }
+      break;
+    }
+    default: {
+      if (flag) {
+        throw std::invalid_argument(format("invalid format string: \"{}\"", s));
+      }
+      break;
+    }
+    }
+  }
+  throw std::invalid_argument(format("invalid format string: \"{}\"", s));
+}
+
+template <typename... Ts>
+inline void print(const std::string &s, const Ts &...values) {
+  prints(format(s, values...));
+}
+
+template <typename T> inline std::string repr(const T &) {
+  return format("<unimplemented: repr({})>", type_name<T>());
+}
+
+template <typename T> inline std::string str(const T &value) {
+  return repr(value);
 }
 
 template <> inline std::string repr<char>(const char &value) {
   return "'" + std::string{value} + "'";
+}
+
+template <> inline std::string str<char>(const char &value) {
+  return std::string{value};
 }
 
 template <> inline std::string repr<signed char>(const signed char &value) {
@@ -118,12 +166,24 @@ template <std::size_t N> inline std::string repr(const char (&value)[N]) {
   return "\"" + std::string(value) + "\"";
 }
 
+template <std::size_t N> inline std::string str(const char (&value)[N]) {
+  return value;
+}
+
 template <> inline std::string repr<const char *>(const char *const &value) {
   return "\"" + std::string(value) + "\"";
 }
 
+template <> inline std::string str<const char *>(const char *const &value) {
+  return value;
+}
+
 template <> inline std::string repr<std::string>(const std::string &value) {
   return "\"" + value + "\"";
+}
+
+template <> inline std::string str<std::string>(const std::string &value) {
+  return value;
 }
 
 template <>
@@ -131,20 +191,13 @@ inline std::string repr<std::string_view>(const std::string_view &value) {
   return repr(std::string(value));
 }
 
+template <>
+inline std::string str<std::string_view>(const std::string_view &value) {
+  return std::string(value);
+}
+
 template <typename T> std::string repr(const std::vector<T> &value) {
-  std::stringstream s;
-
-  s << "[";
-  // todo: implement enumerate()?
-  for (std::size_t i = 0; i < value.size(); ++i) {
-    if (i) {
-      s << ", ";
-    }
-    s << repr(value[i]);
-  }
-  s << "]";
-
-  return s.str();
+  return format("[{}]", cpy::join(", ", cpy::map(repr<T>, value)));
 }
 
 // todo: move this out to extra_type_traits.h or smth
@@ -172,16 +225,9 @@ template <typename T> std::string patch_repr(const T &value) {
 
 template <typename... Ts> std::string repr(const std::tuple<Ts...> &value) {
   const auto repr_ = [](const Ts &...value) {
-    std::stringstream s;
-
-    s << "(";
-
-    std::size_t idx = 0;
-    ((s << (idx++ ? ", " : ""), s << patch_repr(value)), ...);
-
-    s << ")";
-
-    return s.str();
+    std::vector<std::string> list;
+    (list.push_back(patch_repr(value)), ...);
+    return format("({})", cpy::join(", ", list));
   };
 
   return std::apply(repr_, value);
@@ -198,5 +244,7 @@ template <typename T> std::string repr(const std::optional<T> &value) {
 // todo: repr<std::variant<Ts...>>
 
 } // namespace fmt
+
+#define type_name_of(o) type_name<std::declval(o)>()
 
 #endif
