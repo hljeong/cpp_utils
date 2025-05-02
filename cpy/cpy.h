@@ -113,6 +113,23 @@ template <typename T, typename U> inline Set<U> values(const Map<T, U> &m) {
   return s;
 }
 
+template <typename T> inline List<T> repeat(size_t n, const T &value) {
+  List<T> l;
+  for (size_t i = 0; i < n; i++) {
+    l.push_back(value);
+  }
+  return l;
+}
+
+template <size_t N>
+inline List<String> repeat(size_t n, const char (&value)[N]) {
+  List<String> l;
+  for (size_t i = 0; i < n; i++) {
+    l.push_back(String(value));
+  }
+  return l;
+}
+
 } // namespace cpy
 
 #endif

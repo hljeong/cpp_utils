@@ -48,7 +48,21 @@ template <typename T> inline std::string repr(const T &);
 
 template <typename T> inline std::string str(const T &value);
 
-inline void prints(const std::string &s) { printf("%s", s.c_str()); }
+inline std::string repr(const char (&value)[]) {
+  return "\"" + std::string(value) + "\"";
+}
+
+inline std::string str(const char (&value)[]) { return value; }
+
+template <std::size_t N> inline std::string repr(const char (&value)[N]) {
+  return "\"" + std::string(value) + "\"";
+}
+
+template <std::size_t N> inline std::string str(const char (&value)[N]) {
+  return value;
+}
+
+inline void prints(const std::string &s) { printf("%s\n", s.c_str()); }
 
 inline std::string format(const std::string &s) { return s; }
 
@@ -86,6 +100,13 @@ inline std::string format(const std::string &s, const T &value,
 template <typename... Ts>
 inline void print(const std::string &s, const Ts &...values) {
   prints(format(s, values...));
+}
+
+template <typename T, typename... Ts,
+          std::enable_if_t<!std::is_same_v<T, std::string>, bool> = true>
+inline void print(const T &value, const Ts &...rest) {
+  print(format(cpy::join(" ", cpy::repeat(1 + sizeof...(Ts), "{}")), value,
+               rest...));
 }
 
 template <typename T> inline std::string repr(const T &) {
@@ -160,14 +181,6 @@ template <> inline std::string repr<long double>(const long double &value) {
 
 template <> inline std::string repr<bool>(const bool &value) {
   return value ? "true" : "false";
-}
-
-template <std::size_t N> inline std::string repr(const char (&value)[N]) {
-  return "\"" + std::string(value) + "\"";
-}
-
-template <std::size_t N> inline std::string str(const char (&value)[N]) {
-  return value;
 }
 
 template <> inline std::string repr<const char *>(const char *const &value) {
