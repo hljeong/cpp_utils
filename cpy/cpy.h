@@ -18,8 +18,8 @@ using String = std::string;
 template <typename T> using List = std::vector<T>;
 template <typename T> using Queue = std::queue<T>;
 template <typename T> using Set = std::set<T>;
-template <typename T, typename U> using Pair = std::pair<T, U>;
-template <typename T, typename U> using Map = std::map<T, U>;
+template <typename F, typename S> using Pair = std::pair<F, S>;
+template <typename K, typename V> using Map = std::map<K, V>;
 template <typename... Ts> using Tuple = std::tuple<Ts...>;
 
 template <typename F, typename T> inline auto map(F func, const List<T> &list) {
@@ -98,16 +98,16 @@ inline List<T> concat(const List<T> &l1, const List<T> &l2) {
   return l;
 }
 
-template <typename T, typename U> inline Set<T> keys(const Map<T, U> &m) {
-  Set<T> s;
+template <typename K, typename V> inline Set<K> keys(const Map<K, V> &m) {
+  Set<K> s;
   for (const auto &[k, _] : m) {
     s.insert(k);
   }
   return s;
 }
 
-template <typename T, typename U> inline Set<U> values(const Map<T, U> &m) {
-  Set<U> s;
+template <typename K, typename V> inline Set<V> values(const Map<K, V> &m) {
+  Set<V> s;
   for (const auto &[_, v] : m) {
     s.insert(v);
   }
@@ -129,6 +129,18 @@ inline List<String> repeat(size_t n, const char (&value)[N]) {
     l.push_back(String(value));
   }
   return l;
+}
+
+template <typename K, typename V>
+inline Map<K, V> update(const Map<K, V> &m1, const Map<K, V> &m2) {
+  Map<K, V> m;
+  for (const auto &[k, v] : m1) {
+    m[k] = v;
+  }
+  for (const auto &[k, v] : m2) {
+    m[k] = v;
+  }
+  return m;
 }
 
 } // namespace cpy
