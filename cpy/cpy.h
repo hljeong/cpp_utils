@@ -22,20 +22,28 @@ template <typename F, typename S> using Pair = std::pair<F, S>;
 template <typename K, typename V> using Map = std::map<K, V>;
 template <typename... Ts> using Tuple = std::tuple<Ts...>;
 
-template <typename F, typename T> inline auto map(F func, const List<T> &list) {
-  List<decltype(func(std::declval<T>()))> ret;
-  for (const auto &elem : list) {
-    ret.push_back(func(elem));
+template <typename F, typename T> inline auto map(F f, const List<T> &l) {
+  List<decltype(f(std::declval<T>()))> ret;
+  for (const auto &elem : l) {
+    ret.push_back(f(elem));
   }
   return ret;
 }
 
-template <typename F> inline auto map(F func, const String &s) {
-  List<decltype(func(std::declval<char>()))> ret;
-  for (const auto &c : s) {
-    ret.push_back(func(c));
+template <typename F, typename T> inline auto map(F f, const Set<T> &s) {
+  List<T> l;
+  for (const auto &e : s) {
+    l.push_back(e);
   }
-  return ret;
+  return map(f, l);
+}
+
+template <typename F> inline auto map(F f, const String &s) {
+  List<char> l;
+  for (char c : s) {
+    l.push_back(c);
+  }
+  return map(f, l);
 }
 
 template <typename T>
@@ -118,6 +126,20 @@ template <typename K, typename V> inline Set<V> values(const Map<K, V> &m) {
   return s;
 }
 
+template <typename K, typename V> struct Entry {
+  K key;
+  V value;
+
+  bool operator==(const Entry &other) const {
+    return (key == other.key) && (value == other.value);
+  }
+};
+
+template <typename K, typename V>
+inline List<Entry<K, V>> entries(const Map<K, V> &m) {
+  return map([&](auto k) { return Entry<K, V>{k, m.at(k)}; }, keys(m));
+}
+
 template <typename T> inline List<T> repeat(size_t n, const T &value) {
   List<T> l;
   for (size_t i = 0; i < n; i++) {
@@ -133,6 +155,11 @@ inline List<String> repeat(size_t n, const char (&value)[N]) {
     l.push_back(String(value));
   }
   return l;
+}
+
+inline std::string indent(const std::string &s, size_t tabstop = 1,
+                          size_t tab_size = 2) {
+  return join("", repeat(tabstop * tab_size, " ")) + s;
 }
 
 } // namespace cpy
