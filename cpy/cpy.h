@@ -15,12 +15,12 @@ namespace cpy {
 
 using uint = unsigned;
 using String = std::string;
-template <typename T> using List = std::vector<T>;
-template <typename T> using Queue = std::queue<T>;
-template <typename T> using Set = std::set<T>;
+template <typename E> using List = std::vector<E>;
+template <typename E> using Queue = std::queue<E>;
+template <typename E> using Set = std::set<E>;
 template <typename F, typename S> using Pair = std::pair<F, S>;
 template <typename K, typename V> using Map = std::map<K, V>;
-template <typename... Ts> using Tuple = std::tuple<Ts...>;
+template <typename... Es> using Tuple = std::tuple<Es...>;
 
 template <typename F, typename C,
           typename = std::void_t<typename C::value_type>>
@@ -34,35 +34,41 @@ inline auto map(F f, const C &c) {
   return r;
 }
 
-template <typename T>
-inline List<Pair<size_t, T>> enumerate(const List<T> &list) {
+template <typename E> inline List<Pair<size_t, E>> enumerate(const List<E> &l) {
   size_t i = 0;
-  return map([&](T elem) { return std::make_pair(i++, elem); }, list);
+  return map([&](E e) { return std::make_pair(i++, e); }, l);
+}
+
+inline List<char> as_list(const String &s) {
+  List<char> r;
+  for (char c : s) {
+    r.push_back(c);
+  }
+  return r;
 }
 
 inline List<Pair<size_t, char>> enumerate(const String &s) {
-  size_t i = 0;
-  return map([&](char c) { return std::make_pair(i++, c); }, s);
+  return enumerate(as_list(s));
 }
 
-inline String join(String sep, const List<String> &list) {
-  std::stringstream s;
-  for (auto const &[idx, item] : enumerate(list)) {
-    if (idx) {
-      s << sep;
+inline String join(String sep, const List<String> &l) {
+  std::stringstream r;
+  for (auto const &[i, s] : enumerate(l)) {
+    if (i) {
+      r << sep;
     }
-    s << item;
+    r << s;
   }
-  return s.str();
+  return r.str();
 }
 
-template <typename T> inline void assign(Set<T> &s1, const Set<T> &s2) {
+template <typename E> inline void assign(Set<E> &s1, const Set<E> &s2) {
   for (const auto &e : s2) {
     s1.insert(e);
   }
 }
 
-template <typename T> inline void assign(List<T> &l1, const List<T> &l2) {
+template <typename E> inline void assign(List<E> &l1, const List<E> &l2) {
   for (const auto &e : l2) {
     l1.push_back(e);
   }
@@ -76,45 +82,45 @@ inline void assign(Map<K, V> &m1, const Map<K, V> &m2) {
 }
 
 template <typename C> inline C combine(const C &c1, const C &c2) {
-  C c = c1;
-  assign(c, c2);
-  return c;
+  C r = c1;
+  assign(r, c2);
+  return r;
 }
 
-template <typename T, typename... Ts>
-inline T combine(const T &first, const T &second, const Ts &...rest) {
+template <typename C, typename... Cs>
+inline C combine(const C &first, const C &second, const Cs &...rest) {
   return combine(combine(first, second), rest...);
 }
 
-template <typename T>
-inline Set<T> intersection(const Set<T> &s1, const Set<T> s2) {
-  Set<T> s;
+template <typename E>
+inline Set<E> intersection(const Set<E> &s1, const Set<E> s2) {
+  Set<E> r;
   for (const auto &e : s1) {
     if (s2.count(e)) {
-      s.insert(e);
+      r.insert(e);
     }
   }
-  return s;
+  return r;
 }
 
-template <typename T> inline bool disjoint(const Set<T> &s1, const Set<T> s2) {
+template <typename E> inline bool disjoint(const Set<E> &s1, const Set<E> s2) {
   return intersection(s1, s2).size() == 0;
 }
 
 template <typename K, typename V> inline Set<K> keys(const Map<K, V> &m) {
-  Set<K> s;
+  Set<K> r;
   for (const auto &[k, _] : m) {
-    s.insert(k);
+    r.insert(k);
   }
-  return s;
+  return r;
 }
 
 template <typename K, typename V> inline Set<V> values(const Map<K, V> &m) {
-  Set<V> s;
+  Set<V> r;
   for (const auto &[_, v] : m) {
-    s.insert(v);
+    r.insert(v);
   }
-  return s;
+  return r;
 }
 
 template <typename K, typename V> struct Entry {
@@ -131,25 +137,24 @@ inline List<Entry<K, V>> entries(const Map<K, V> &m) {
   return map([&](auto k) { return Entry<K, V>{k, m.at(k)}; }, keys(m));
 }
 
-template <typename T> inline List<T> repeat(size_t n, const T &value) {
-  List<T> l;
+template <typename E> inline List<E> repeat(size_t n, const E &e) {
+  List<E> r;
   for (size_t i = 0; i < n; i++) {
-    l.push_back(value);
+    r.push_back(e);
   }
-  return l;
+  return r;
 }
 
-template <size_t N>
-inline List<String> repeat(size_t n, const char (&value)[N]) {
-  List<String> l;
+template <size_t N> inline List<String> repeat(size_t n, const char (&s)[N]) {
+  List<String> r;
   for (size_t i = 0; i < n; i++) {
-    l.push_back(String(value));
+    r.push_back(String(s));
   }
-  return l;
+  return r;
 }
 
-inline bool in(const std::string &pattern, const std::string &s) {
-  return s.find(pattern) != std::string::npos;
+inline bool in(const std::string &p, const std::string &s) {
+  return s.find(p) != std::string::npos;
 }
 
 } // namespace cpy
