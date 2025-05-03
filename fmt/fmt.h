@@ -64,31 +64,76 @@ template <std::size_t N> inline std::string str(const char (&value)[N]) {
 
 inline void prints(const std::string &s) { printf("%s\n", s.c_str()); }
 
-inline std::string format(const std::string &s) { return s; }
+template <typename... Ts>
+std::string format(const std::string &s, const Ts &...values);
 
-template <typename T, typename... Ts>
-inline std::string format(const std::string &s, const T &value,
-                          const Ts &...rest) {
-  bool flag = false;
-  for (const auto &[i, c] : cpy::enumerate(s)) {
+inline void format(std::stringstream &ss, size_t &idx, const std::string &s) {
+  const size_t n = s.size();
+  while (idx < n) {
+    const char c = s[idx++];
     switch (c) {
     case '{': {
-      flag = !flag;
+      if (idx < n && s[idx++] == '{') {
+        ss << '{';
+      } else {
+        throw std::invalid_argument(
+            format("invalid format string: \"{}\" (dangling '{{')", s));
+      }
+      break;
+    }
+    case '}': {
+      if (idx < n && s[idx++] == '}') {
+        ss << '}';
+      } else {
+        throw std::invalid_argument(
+            format("invalid format string: \"{}\" (dangling '}}')", s));
+      }
+      break;
+    }
+    default: {
+      ss << c;
+    }
+    }
+  }
+}
+
+template <typename T, typename... Ts>
+inline void format(std::stringstream &ss, size_t &idx, const std::string &s,
+                   const T &first, const Ts &...rest) {
+  const size_t n = s.size();
+  bool flag = false;
+  while (idx < n) {
+    const char c = s[idx++];
+    switch (c) {
+    case '{': {
+      if (idx < n && s[idx] == '{') {
+        idx++;
+        ss << '{';
+      } else {
+        flag = !flag;
+      }
       break;
     }
     case '}': {
       if (flag) {
-        // todo: this implementation is wrong. escaped braces are not resolved
-        auto s_ = s.substr(0, i - 1) + str(value) + s.substr(i + 1);
-        return format(s_, rest...);
-      } else if (!(i + 1 < s.size() && s[i + 1] == '}')) {
-        throw std::invalid_argument(format("invalid format string: \"{}\"", s));
+        ss << str(first);
+        format(ss, idx, s, rest...);
+        return;
+      } else if (idx < n && s[idx++] == '}') {
+        ss << '}';
+      } else {
+        throw std::invalid_argument(
+            format("invalid format string: \"{}\" (dangling '}}')", s));
       }
       break;
     }
     default: {
       if (flag) {
-        throw std::invalid_argument(format("invalid format string: \"{}\"", s));
+        throw std::invalid_argument(format(
+            "invalid format string: \"{}\" (format specifiers not supported)",
+            s));
+      } else {
+        ss << c;
       }
       break;
     }
@@ -98,8 +143,20 @@ inline std::string format(const std::string &s, const T &value,
 }
 
 template <typename... Ts>
+inline std::string format(const std::string &s, const Ts &...values) {
+  std::stringstream ss;
+  size_t idx = 0;
+  format(ss, idx, s, values...);
+  return ss.str();
+}
+
+template <typename... Ts>
 inline void print(const std::string &s, const Ts &...values) {
   prints(format(s, values...));
+}
+
+template <typename... Ts> inline void printo(const Ts &...values) {
+  prints(format(cpy::join(" ", cpy::repeat(sizeof...(Ts), "{}")), values...));
 }
 
 template <typename T> inline std::string repr(const T &) {
@@ -220,8 +277,8 @@ struct is_optional<const std::optional<T> &> : std::true_type {};
 template <typename T> constexpr bool is_optional_v = is_optional<T>::value;
 
 // not sure whats wrong with (const std::optional &) but repr(const
-// std::optional &) inside repr(const std::tuple<std::optional<T>> &) would not
-// work without this patch...
+// std::optional &) inside repr(const std::tuple<std::optional<T>> &) would
+// not work without this patch...
 template <typename T> std::string patch_repr(const T &value) {
   if constexpr (is_optional_v<T>) {
     return value ? repr(*value) : "std::nullopt";

@@ -20,6 +20,23 @@ void test(const char (&value)[N], const char *expected) {
   assert_eq(repr(value), expected);
 }
 
+struct S {
+  struct T {
+    int x;
+  };
+
+  int y;
+  T t;
+};
+
+template <> std::string fmt::repr(const S::T &value) {
+  return format("{{ .x = {} }}", value.x);
+}
+
+template <> std::string fmt::repr(const S &value) {
+  return format("{{ .y = {}, .t = {} }}", value.y, value.t);
+}
+
 int main() {
   test(3, "3");
 
@@ -62,4 +79,6 @@ int main() {
        "([-1, -2, 3, 4], std::nullopt, \"hi\", 12)");
 
   test(std::string_view("view"), "\"view\"");
+
+  test(S{3, {4}}, "{ .y = 3, .t = { .x = 4 } }");
 }
