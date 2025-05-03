@@ -181,6 +181,8 @@ inline std::string format(const std::string &s, const Ts &...values) {
   return ss.str();
 }
 
+inline void print() { prints(""); }
+
 template <typename... Ts>
 inline void print(const std::string &s, const Ts &...values) {
   prints(format(s, values...));

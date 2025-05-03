@@ -22,28 +22,16 @@ template <typename F, typename S> using Pair = std::pair<F, S>;
 template <typename K, typename V> using Map = std::map<K, V>;
 template <typename... Ts> using Tuple = std::tuple<Ts...>;
 
-template <typename F, typename T> inline auto map(F f, const List<T> &l) {
-  List<decltype(f(std::declval<T>()))> ret;
-  for (const auto &elem : l) {
-    ret.push_back(f(elem));
+template <typename F, typename C,
+          typename = std::void_t<typename C::value_type>>
+inline auto map(F f, const C &c) {
+  using E = typename C::value_type;
+  using R = decltype(f(std::declval<E>()));
+  List<R> r;
+  for (const auto &e : c) {
+    r.push_back(f(e));
   }
-  return ret;
-}
-
-template <typename F, typename T> inline auto map(F f, const Set<T> &s) {
-  List<T> l;
-  for (const auto &e : s) {
-    l.push_back(e);
-  }
-  return map(f, l);
-}
-
-template <typename F> inline auto map(F f, const String &s) {
-  List<char> l;
-  for (char c : s) {
-    l.push_back(c);
-  }
-  return map(f, l);
+  return r;
 }
 
 template <typename T>
@@ -87,12 +75,15 @@ inline void assign(Map<K, V> &m1, const Map<K, V> &m2) {
   }
 }
 
-template <typename T, typename... Ts,
-          std::enable_if_t<(std::is_same_v<T, Ts> && ...), bool> = true>
-inline T combine(const T &first, const Ts &...rest) {
-  T container = first;
-  (assign(container, rest), ...);
-  return container;
+template <typename C> inline C combine(const C &c1, const C &c2) {
+  C c = c1;
+  assign(c, c2);
+  return c;
+}
+
+template <typename T, typename... Ts>
+inline T combine(const T &first, const T &second, const Ts &...rest) {
+  return combine(combine(first, second), rest...);
 }
 
 template <typename T>

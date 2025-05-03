@@ -16,5 +16,8 @@ int main() {
   assert(entries(Map<int, int>{{1, 2}, {3, 4}}) ==
          (List<Entry<int, int>>{{1, 2}, {3, 4}}));
 
+  assert(combine(List<int>{1, 2, 3}, {3, 4, 5}) ==
+         List<int>({1, 2, 3, 3, 4, 5}));
+
   return 0;
 }
