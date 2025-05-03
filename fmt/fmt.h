@@ -102,13 +102,6 @@ inline void print(const std::string &s, const Ts &...values) {
   prints(format(s, values...));
 }
 
-template <typename T, typename... Ts,
-          std::enable_if_t<!std::is_same_v<T, std::string>, bool> = true>
-inline void print(const T &value, const Ts &...rest) {
-  print(format(cpy::join(" ", cpy::repeat(1 + sizeof...(Ts), "{}")), value,
-               rest...));
-}
-
 template <typename T> inline std::string repr(const T &) {
   return format("<unimplemented: repr({})>", type_name<T>());
 }
