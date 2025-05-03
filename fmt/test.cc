@@ -2,21 +2,31 @@
 
 #include "fmt.h"
 
+using namespace cpy;
 using namespace fmt;
 
-void assert_eq(std::string value, const char *expected) {
+std::string format_string(const std::string &s) {
+  if (in("\n", s)) {
+    return "\n---\n" + s + "\n---\n";
+  } else {
+    return "\"" + s + "\"";
+  }
+}
+
+void assert_eq(std::string value, const std::string &expected) {
   if (value != expected) {
-    printf("expected: %s, got: %s\n", expected, value.c_str());
+    printf("expected: %s, got: %s\n", format_string(expected).c_str(),
+           format_string(value).c_str());
   }
   assert(value == expected);
 }
 
-template <typename T> void test(T value, const char *expected) {
+template <typename T> void test_repr(T value, const std::string &expected) {
   assert_eq(repr(value), expected);
 }
 
 template <std::size_t N>
-void test(const char (&value)[N], const char *expected) {
+void test_repr(const char (&value)[N], const char *expected) {
   assert_eq(repr(value), expected);
 }
 
@@ -30,55 +40,80 @@ struct S {
 };
 
 template <> std::string fmt::repr(const S::T &value) {
-  return format("{{ .x = {} }}", value.x);
+  return format("{{.x = {}}}", value.x);
 }
 
 template <> std::string fmt::repr(const S &value) {
-  return format("{{ .y = {}, .t = {} }}", value.y, value.t);
+  return format("{{.y = {}, .t = {}}}", value.y, value.t);
 }
 
 int main() {
-  test(3, "3");
+  test_repr(3, "3");
 
-  test('x', "'x'");
+  test_repr('x', "'x'");
 
-  test(static_cast<unsigned char>(2), "2");
+  test_repr(static_cast<unsigned char>(2), "2");
 
-  test(static_cast<signed char>(-2), "-2");
+  test_repr(static_cast<signed char>(-2), "-2");
 
-  test(static_cast<unsigned short>(300), "300");
+  test_repr(static_cast<unsigned short>(300), "300");
 
-  test(static_cast<short>(-300), "-300");
+  test_repr(static_cast<short>(-300), "-300");
 
-  test(true, "true");
+  test_repr(true, "true");
 
-  test(false, "false");
+  test_repr(false, "false");
 
-  test("hello literal", "\"hello literal\"");
+  test_repr("hello literal", "\"hello literal\"");
 
-  test(static_cast<const char *>("hello"), "\"hello\"");
+  test_repr(static_cast<const char *>("hello"), "\"hello\"");
 
-  test(std::string("world"), "\"world\"");
+  test_repr(std::string("world"), "\"world\"");
 
-  test(std::vector<std::string>{"a", "b", "c"}, "[\"a\", \"b\", \"c\"]");
+  test_repr(std::vector<std::string>{"a", "b", "c"}, "[\"a\", \"b\", \"c\"]");
 
-  test(std::tuple<>(), "()");
+  test_repr(std::tuple<>(), "()");
 
-  test(std::tuple<uint32_t, std::string>(2, "hi"), "(2, \"hi\")");
+  test_repr(std::tuple<uint32_t, std::string>(2, "hi"), "(2, \"hi\")");
 
-  test(std::nullopt, "std::nullopt");
+  test_repr(std::nullopt, "std::nullopt");
 
-  test<std::optional<bool>>(std::nullopt, "std::nullopt");
+  test_repr<std::optional<bool>>(std::nullopt, "std::nullopt");
 
-  test(std::tuple<std::optional<uint32_t>>(std::nullopt), "(std::nullopt)");
+  test_repr(std::tuple<std::optional<uint32_t>>(std::nullopt),
+            "(std::nullopt)");
 
-  test(std::tuple<std::vector<uint32_t>>({{2}}), "([2])");
+  test_repr(std::tuple<std::vector<uint32_t>>({{2}}), "([2])");
 
-  test(std::tuple<std::vector<int8_t>, std::optional<bool>, std::string,
-                  uint32_t>{{-1, -2, 3, 4}, std::nullopt, "hi", 12},
-       "([-1, -2, 3, 4], std::nullopt, \"hi\", 12)");
+  test_repr(std::tuple<std::vector<int8_t>, std::optional<bool>, std::string,
+                       uint32_t>{{-1, -2, 3, 4}, std::nullopt, "hi", 12},
+            "([-1, -2, 3, 4], std::nullopt, \"hi\", 12)");
 
-  test(std::string_view("view"), "\"view\"");
+  test_repr(std::string_view("view"), "\"view\"");
 
-  test(S{3, {4}}, "{ .y = 3, .t = { .x = 4 } }");
+  test_repr(S{3, {4}}, "{.y = 3, .t = {.x = 4}}");
+
+  assert_eq(indent("hi"), "  hi");
+
+  assert_eq(indent("hi", {2}), "    hi");
+
+  // ...but why?
+  assert_eq(indent("hi", {.size = 3}), "   hi");
+
+  assert_eq(indent("lorem\nipsum\n"), "  lorem\n  ipsum\n");
+
+  assert_eq(bracket("1, 2, 3"), "[1, 2, 3]");
+
+  assert_eq(bracket("3, 4, 5", Bracket::Style::Spaced), "[ 3, 4, 5 ]");
+
+  assert_eq(angle_bracket("bra | ket", Bracket::Style::Spaced),
+            "< bra | ket >");
+
+  assert_eq(parenthesize("parenthesize(...)"), "(parenthesize(...))");
+
+  assert_eq(brace("printf(\"hello world\");", Bracket::Style::Block),
+            "{\n  printf(\"hello world\");\n}");
+
+  assert_eq(brace("printf(\"hello world\");", {.size = 3}),
+            "{\n   printf(\"hello world\");\n}");
 }

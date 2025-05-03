@@ -3,6 +3,7 @@
 #ifndef FMT_H
 #define FMT_H
 
+#include <algorithm>
 #include <cxxabi.h>
 #include <memory>
 #include <optional>
@@ -305,6 +306,143 @@ template <typename T> std::string repr(const std::optional<T> &value) {
 }
 
 // todo: repr<std::variant<Ts...>>
+
+struct Indent {
+  size_t stop = 1;
+  size_t size = 2;
+
+  std::string apply(const std::string &s) const {
+    const std::string tab(stop * size, ' ');
+    std::stringstream ss;
+    ss << tab;
+    const size_t n = s.size();
+    for (const auto &[i, c] : cpy::enumerate(s)) {
+      switch (c) {
+      case '\n':
+        ss << c;
+        if (i + 1 < n && s[i + 1] != '\n') {
+          ss << tab;
+        }
+        break;
+      default:
+        ss << c;
+        break;
+      }
+    }
+    return ss.str();
+  }
+
+  std::string operator+(const std::string &s) const { return apply(s); }
+
+  Indent operator+(int delta) const {
+    return {static_cast<size_t>(std::max(0, static_cast<int>(stop) + delta)),
+            size};
+  }
+};
+
+inline std::string indent(const std::string &s, const Indent &indent = {}) {
+  return indent + s;
+}
+
+struct Bracket {
+
+  enum class Kind {
+    Brackets,
+    Parentheses,
+    Braces,
+    AngleBrackets,
+  };
+
+  enum class Style {
+    Plain,
+    Spaced,
+    Block,
+  };
+
+  Kind kind{Kind::Brackets};
+  Style style{Style::Plain};
+  Indent indent{};
+
+  Bracket() {}
+
+  Bracket(Style style_) : style(style_) {}
+
+  Bracket(Kind kind_, Style style_) : kind(kind_), style(style_) {}
+
+  Bracket(Style style_, Kind kind_) : kind(kind_), style(style_) {}
+
+  Bracket(Kind kind_, Indent indent_)
+      : kind(kind_), style(Style::Block), indent(indent_) {}
+
+  std::string apply(const std::string &s) const {
+    std::string open;
+    std::string close;
+    switch (kind) {
+    case Kind::Parentheses:
+      open = "(";
+      close = ")";
+      break;
+    case Kind::Brackets:
+      open = "[";
+      close = "]";
+      break;
+    case Kind::Braces:
+      open = "{";
+      close = "}";
+      break;
+    case Kind::AngleBrackets:
+      open = "<";
+      close = ">";
+      break;
+    }
+    switch (style) {
+    case Style::Plain:
+      return cpy::join("", {open, s, close});
+    case Style::Spaced:
+      return cpy::join(" ", {open, s, close});
+    case Style::Block:
+      return cpy::join("\n", {open, indent + s, close});
+    }
+    return s;
+  }
+};
+
+inline std::string bracket(const std::string &s, const Bracket &bracket = {}) {
+  return bracket.apply(s);
+}
+
+inline std::string bracket(const std::string &s, const Indent &indent) {
+  return Bracket{Bracket::Kind::Brackets, indent}.apply(s);
+}
+
+inline std::string
+parenthesize(const std::string &s,
+             const Bracket::Style &style = Bracket::Style::Plain) {
+  return Bracket{Bracket::Kind::Parentheses, style}.apply(s);
+}
+
+inline std::string parenthesize(const std::string &s, const Indent &indent) {
+  return Bracket{Bracket::Kind::Parentheses, indent}.apply(s);
+}
+
+inline std::string brace(const std::string &s,
+                         const Bracket::Style &style = Bracket::Style::Plain) {
+  return Bracket{Bracket::Kind::Braces, style}.apply(s);
+}
+
+inline std::string brace(const std::string &s, const Indent &indent) {
+  return Bracket{Bracket::Kind::Braces, indent}.apply(s);
+}
+
+inline std::string
+angle_bracket(const std::string &s,
+              const Bracket::Style &style = Bracket::Style::Plain) {
+  return Bracket{Bracket::Kind::AngleBrackets, style}.apply(s);
+}
+
+inline std::string angle_bracket(const std::string &s, const Indent &indent) {
+  return Bracket{Bracket::Kind::AngleBrackets, indent}.apply(s);
+}
 
 } // namespace fmt
 

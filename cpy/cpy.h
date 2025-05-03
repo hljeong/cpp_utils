@@ -157,9 +157,8 @@ inline List<String> repeat(size_t n, const char (&value)[N]) {
   return l;
 }
 
-inline std::string indent(const std::string &s, size_t tabstop = 1,
-                          size_t tab_size = 2) {
-  return join("", repeat(tabstop * tab_size, " ")) + s;
+inline bool in(const std::string &pattern, const std::string &s) {
+  return s.find(pattern) != std::string::npos;
 }
 
 } // namespace cpy
