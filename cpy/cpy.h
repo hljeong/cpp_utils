@@ -20,6 +20,7 @@ template <typename T> using Queue = std::queue<T>;
 template <typename T> using Set = std::set<T>;
 template <typename T, typename U> using Pair = std::pair<T, U>;
 template <typename T, typename U> using Map = std::map<T, U>;
+template <typename... Ts> using Tuple = std::tuple<Ts...>;
 
 template <typename F, typename T> inline auto map(F func, const List<T> &list) {
   List<decltype(func(std::declval<T>()))> ret;
