@@ -63,10 +63,39 @@ template <std::size_t N> inline std::string str(const char (&value)[N]) {
   return value;
 }
 
-inline void prints(const std::string &s) { printf("%s\n", s.c_str()); }
-
 template <typename... Ts>
 std::string format(const std::string &s, const Ts &...values);
+
+// todo: these repr() overloads need to be defined before the definitions of
+// format() below. figure out why (the compiler instantly resolves the function
+// call with only the known declarations?)
+
+template <typename T> std::string repr(const std::vector<T> &value) {
+  // need to explicitly spell out lambda instead of using repr<T>
+  // since overloads such as repr(const std::vector<?> &) are not
+  // template specializations
+  return format(
+      "[{}]",
+      cpy::join(", ", cpy::map([&](const auto &e) { return repr(e); }, value)));
+}
+
+template <typename T> std::string repr(const std::set<T> &value) {
+  return format(
+      "{{{}}}",
+      cpy::join(", ", cpy::map([&](const auto &e) { return repr(e); }, value)));
+}
+
+template <typename K, typename V>
+std::string repr(const std::map<K, V> &value) {
+  return format("{{{}}}", cpy::join(", ", cpy::map(
+                                              [&](const auto &e) {
+                                                const auto &[k, v] = e;
+                                                return format("{} => {}", k, v);
+                                              },
+                                              cpy::entries(value))));
+}
+
+inline void prints(const std::string &s) { printf("%s\n", s.c_str()); }
 
 inline void format(std::stringstream &ss, size_t &idx, const std::string &s) {
   const size_t n = s.size();
@@ -259,31 +288,6 @@ inline std::string repr<std::string_view>(const std::string_view &value) {
 template <>
 inline std::string str<std::string_view>(const std::string_view &value) {
   return std::string(value);
-}
-
-template <typename T> std::string repr(const std::vector<T> &value) {
-  // need to explicitly spell out lambda instead of using repr<T>
-  // since overloads such as repr(const std::vector<?> &) are not
-  // template specializations
-  return format(
-      "[{}]",
-      cpy::join(", ", cpy::map([&](const auto &e) { return repr(e); }, value)));
-}
-
-template <typename T> std::string repr(const std::set<T> &value) {
-  return format(
-      "{{{}}}",
-      cpy::join(", ", cpy::map([&](const auto &e) { return repr(e); }, value)));
-}
-
-template <typename K, typename V>
-std::string repr(const std::map<K, V> &value) {
-  return format("{{{}}}", cpy::join(", ", cpy::map(
-                                              [&](const auto &e) {
-                                                const auto &[k, v] = e;
-                                                return format("{} => {}", k, v);
-                                              },
-                                              cpy::entries(value))));
 }
 
 // todo: move this out to extra_type_traits.h or smth

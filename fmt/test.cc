@@ -105,6 +105,11 @@ int main() {
   test_repr(std::vector<S>({{2}, {.t = {4}}}),
             "[{.y = 2, .t = {.x = 0}}, {.y = 0, .t = {.x = 4}}]");
 
+  {
+    std::vector<S> value{{2}, {.t = {4}}};
+    assert_eq(format("{}", value), repr(value));
+  }
+
   assert_eq(indent("hi"), "  hi");
 
   assert_eq(indent("hi", {2}), "    hi");
