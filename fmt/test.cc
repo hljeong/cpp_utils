@@ -93,6 +93,18 @@ int main() {
 
   test_repr(S{3, {4}}, "{.y = 3, .t = {.x = 4}}");
 
+  test_repr(std::set<int>({1, 2, 3}), "{1, 2, 3}");
+
+  test_repr(std::map<int, bool>({{1, true}, {2, false}, {3, true}}),
+            "{1 => true, 2 => false, 3 => true}");
+
+  test_repr(std::vector<std::vector<char>>(
+                {{'a', 'b'}, {'c', 'd', 'e', 'f'}, {}, {'x', 'y', 'z'}}),
+            "[['a', 'b'], ['c', 'd', 'e', 'f'], [], ['x', 'y', 'z']]");
+
+  test_repr(std::vector<S>({{2}, {.t = {4}}}),
+            "[{.y = 2, .t = {.x = 0}}, {.y = 0, .t = {.x = 4}}]");
+
   assert_eq(indent("hi"), "  hi");
 
   assert_eq(indent("hi", {2}), "    hi");

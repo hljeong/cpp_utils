@@ -77,6 +77,7 @@ inline void format(std::stringstream &ss, size_t &idx, const std::string &s) {
       if (idx < n && s[idx++] == '{') {
         ss << '{';
       } else {
+        // todo: this could be caused by not enough values supplied
         throw std::invalid_argument(
             format("invalid format string: \"{}\" (dangling '{{')", s));
       }
@@ -261,7 +262,28 @@ inline std::string str<std::string_view>(const std::string_view &value) {
 }
 
 template <typename T> std::string repr(const std::vector<T> &value) {
-  return format("[{}]", cpy::join(", ", cpy::map(repr<T>, value)));
+  // need to explicitly spell out lambda instead of using repr<T>
+  // since overloads such as repr(const std::vector<?> &) are not
+  // template specializations
+  return format(
+      "[{}]",
+      cpy::join(", ", cpy::map([&](const auto &e) { return repr(e); }, value)));
+}
+
+template <typename T> std::string repr(const std::set<T> &value) {
+  return format(
+      "{{{}}}",
+      cpy::join(", ", cpy::map([&](const auto &e) { return repr(e); }, value)));
+}
+
+template <typename K, typename V>
+std::string repr(const std::map<K, V> &value) {
+  return format("{{{}}}", cpy::join(", ", cpy::map(
+                                              [&](const auto &e) {
+                                                const auto &[k, v] = e;
+                                                return format("{} => {}", k, v);
+                                              },
+                                              cpy::entries(value))));
 }
 
 // todo: move this out to extra_type_traits.h or smth
