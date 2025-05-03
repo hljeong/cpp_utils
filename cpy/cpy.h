@@ -60,15 +60,31 @@ inline String join(String sep, const List<String> &list) {
   return s.str();
 }
 
-template <typename T> inline Set<T> union_(const Set<T> &s1, const Set<T> s2) {
-  Set<T> s;
-  for (const auto &e : s1) {
-    s.insert(e);
-  }
+template <typename T> inline void assign(Set<T> &s1, const Set<T> &s2) {
   for (const auto &e : s2) {
-    s.insert(e);
+    s1.insert(e);
   }
-  return s;
+}
+
+template <typename T> inline void assign(List<T> &l1, const List<T> &l2) {
+  for (const auto &e : l2) {
+    l1.push_back(e);
+  }
+}
+
+template <typename K, typename V>
+inline void assign(Map<K, V> &m1, const Map<K, V> &m2) {
+  for (const auto &[k, v] : m2) {
+    m1[k] = v;
+  }
+}
+
+template <typename T, typename... Ts,
+          std::enable_if_t<(std::is_same_v<T, Ts> && ...), bool> = true>
+inline T combine(const T &first, const Ts &...rest) {
+  T container = first;
+  (assign(container, rest), ...);
+  return container;
 }
 
 template <typename T>
@@ -84,18 +100,6 @@ inline Set<T> intersection(const Set<T> &s1, const Set<T> s2) {
 
 template <typename T> inline bool disjoint(const Set<T> &s1, const Set<T> s2) {
   return intersection(s1, s2).size() == 0;
-}
-
-template <typename T>
-inline List<T> concat(const List<T> &l1, const List<T> &l2) {
-  List<T> l;
-  for (const auto &e : l1) {
-    l.push_back(e);
-  }
-  for (const auto &e : l2) {
-    l.push_back(e);
-  }
-  return l;
 }
 
 template <typename K, typename V> inline Set<K> keys(const Map<K, V> &m) {
@@ -129,18 +133,6 @@ inline List<String> repeat(size_t n, const char (&value)[N]) {
     l.push_back(String(value));
   }
   return l;
-}
-
-template <typename K, typename V>
-inline Map<K, V> update(const Map<K, V> &m1, const Map<K, V> &m2) {
-  Map<K, V> m;
-  for (const auto &[k, v] : m1) {
-    m[k] = v;
-  }
-  for (const auto &[k, v] : m2) {
-    m[k] = v;
-  }
-  return m;
 }
 
 } // namespace cpy
