@@ -423,6 +423,11 @@ struct Bracket {
       close = ">";
       break;
     }
+
+    if (s == "") {
+      return cpy::join("", {open, close});
+    }
+
     switch (style) {
     case Style::Plain:
       return cpy::join("", {open, s, close});

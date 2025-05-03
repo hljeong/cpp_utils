@@ -133,4 +133,6 @@ int main() {
 
   assert_eq(brace("printf(\"hello world\");", {.size = 3}),
             "{\n   printf(\"hello world\");\n}");
+
+  assert_eq(brace("", {.size = 3}), "{}");
 }
