@@ -1,15 +1,19 @@
-MAKEFLAGS += --no-print-directory
+include makefile_utils/defaults.mk
 
 CC = g++ -Wall -g -std=c++17
 
-TARGETS = $(patsubst %/, %, $(filter %/, $(wildcard */)))
+TARGETS = $(filter-out makefile_utils, $(patsubst %/, %, $(filter %/, $(wildcard */))))
 
-.PHONY: all clean test $(TARGETS)
+.PHONY: all clean setup update test $(TARGETS)
 
 all: test
 
 clean:
 	rm -rf a.out
+
+setup: git-hook-install
+
+update: git-submodule-update
 
 test: $(TARGETS)
 
@@ -20,3 +24,5 @@ test_target:
 	@$(CC) $(TARGET)/test.cc
 	@./a.out
 	@echo "all tests passed for $(TARGET)"
+
+include makefile_utils/git.mk
