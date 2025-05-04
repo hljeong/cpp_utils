@@ -46,28 +46,6 @@ template <typename T> std::string type_name() {
   return r;
 }
 
-// template <typename T> inline std::string repr(const T &);
-
-// template <typename T> inline std::string str(const T &value);
-
-// inline std::string repr(const char (&value)[]) {
-//   return "\"" + std::string(value) + "\"";
-// }
-
-// inline std::string repr(const char *value) {
-//   return "\"" + std::string(value) + "\"";
-// }
-
-// template <std::size_t N> inline std::string repr(const char (&value)[N]) {
-//   return "\"" + std::string(value) + "\"";
-// }
-
-// template <std::size_t N> inline std::string str(const char (&value)[N]) {
-//   return value;
-// }
-//
-// inline void prints(const std::string &s) { printf("%s\n", s.c_str()); }
-
 template <typename... Ts>
 std::string format(const std::string &s, const Ts &...values);
 
@@ -83,28 +61,6 @@ void format(std::stringstream &ss, size_t &idx, const std::string &s,
 
 template <typename... Ts>
 std::string format(const std::string &s, const Ts &...values);
-
-// inline void print() {
-// prints(""); }
-//
-// template <typename...
-// Ts> inline void
-// print(const std::string
-// &s, const Ts &...values)
-// {
-//   prints(format(s,
-//   values...));
-// }
-//
-// template <typename...
-// Ts> inline void
-// printo(const Ts
-// &...values) {
-//   prints(format(cpy::join("
-//   ",
-//   cpy::repeat(sizeof...(Ts),
-//   "{}")), values...));
-// }
 
 std::string repr(const char &value);
 std::string repr(const signed char &value);
@@ -137,44 +93,6 @@ std::string str(const char &value);
 std::string str(const char *const &value);
 std::string str(const std::string &value);
 std::string str(const std::string_view &value);
-
-// // todo: move this out to extra_type_traits.h or smth
-// template <typename T> struct is_optional : std::false_type {};
-//
-// template <typename T> struct is_optional<std::optional<T>> : std::true_type
-// {};
-//
-// template <typename T>
-// struct is_optional<const std::optional<T>> : std::true_type {};
-//
-// template <typename T>
-// struct is_optional<const std::optional<T> &> : std::true_type {};
-//
-// template <typename T> constexpr bool is_optional_v = is_optional<T>::value;
-//
-// // not sure whats wrong with (const std::optional &) but repr(const
-// // std::optional &) inside repr(const std::tuple<std::optional<T>> &) would
-// not
-// // work without this patch...
-// template <typename T> std::string patch_repr(const T &value) {
-//   if constexpr (is_optional_v<T>) {
-//     return value ? repr(*value) : "std::nullopt";
-//   }
-//   return repr(value);
-// }
-//
-// template <typename... Ts> std::string repr(const std::tuple<Ts...> &value) {
-//   const auto repr_ = [&](const Ts &...value) {
-//     std::vector<std::string> list;
-//     (list.push_back(repr(value)), ...);
-//     return format("({})", cpy::join(", ", list));
-//   };
-//
-//   return std::apply(repr_, value);
-// }
-
-// todo:
-// repr<std::variant<Ts...>>
 
 struct Indent {
   size_t stop = 1;
