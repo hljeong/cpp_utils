@@ -25,8 +25,8 @@ template <typename T> void test_repr(T value, const std::string &expected) {
   assert_eq(repr(value), expected);
 }
 
-template <std::size_t N>
-void test_repr(const char (&value)[N], const char *expected) {
+template <size_t N>
+void test_repr(const char (&value)[N], const std::string &expected) {
   assert_eq(repr(value), expected);
 }
 
@@ -39,11 +39,9 @@ struct S {
   T t;
 };
 
-template <> std::string fmt::repr(const S::T &value) {
-  return format("{{.x = {}}}", value.x);
-}
+String repr(const S::T &value) { return format("{{.x = {}}}", value.x); }
 
-template <> std::string fmt::repr(const S &value) {
+String repr(const S &value) {
   return format("{{.y = {}, .t = {}}}", value.y, value.t);
 }
 
@@ -69,6 +67,8 @@ int main() {
   test_repr(static_cast<const char *>("hello"), "\"hello\"");
 
   test_repr(std::string("world"), "\"world\"");
+
+  test_repr(std::vector<int>{2, 5, 0}, "[2, 5, 0]");
 
   test_repr(std::vector<std::string>{"a", "b", "c"}, "[\"a\", \"b\", \"c\"]");
 
