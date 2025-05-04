@@ -94,6 +94,17 @@ std::string str(const char *const &value);
 std::string str(const std::string &value);
 std::string str(const std::string_view &value);
 
+inline void print() { printf("\n"); }
+
+template <typename... Ts>
+inline void print(const std::string &s, const Ts &...values) {
+  printf("%s\n", format(s, values...).c_str());
+}
+
+template <typename... Ts> inline void printo(const Ts &...values) {
+  print(cpy::join(" ", cpy::repeat(sizeof...(Ts), "{}")), values...);
+}
+
 struct Indent {
   size_t stop = 1;
   size_t size = 2;
