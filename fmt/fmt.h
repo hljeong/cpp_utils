@@ -396,6 +396,7 @@ inline std::string fmt::Indent::apply(const std::string &s) const {
   }
   return ss.str();
 }
+
 inline std::string fmt::Bracket::apply(const std::string &s) const {
   std::string open;
   std::string close;
