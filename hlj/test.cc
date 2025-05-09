@@ -17,4 +17,6 @@ int main() {
       Tuple<int, char, List<Pair<Map<String, Tuple<>>, Optional<bool>>>>>;
   assert(a ==
          "Tuple<int, char, List<Pair<Map<String, Tuple<>>, Optional<bool>>>>");
+
+  assert(formato(3, "hello", repr('w'), 'd') == "3 hello 'w' d");
 }

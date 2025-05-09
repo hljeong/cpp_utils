@@ -754,7 +754,7 @@ inline hlj::String hlj::format(const String &s, const Ts &...vs) {
 }
 
 template <typename... Ts> inline hlj::String hlj::formato(const Ts &...vs) {
-  return join(" ", repeat(sizeof...(Ts), "{}"), vs...);
+  return format(join(" ", repeat(sizeof...(Ts), "{}")), vs...);
 }
 
 inline void hlj::print() { printf("\n"); }
