@@ -16,25 +16,6 @@
 
 namespace hlj {
 
-// template metaprogramming
-
-namespace detail {
-template <size_t I, typename... Ts> struct nth_t;
-} // namespace detail
-
-template <size_t I, typename... Ts>
-using nth = typename detail::nth_t<I, Ts...>::type;
-
-// see: https://en.cppreference.com/w/cpp/utility/variant/visit
-template <typename... Ts> struct overloads : Ts... {
-  using Ts::operator()...;
-};
-
-// deduction guide needed pre-c++20: https://stackoverflow.com/a/75699136
-template <typename... Ts> overloads(Ts...) -> overloads<Ts...>;
-
-// aliases
-
 using u8 = uint8_t;
 using u16 = uint16_t;
 using u32 = uint32_t;
@@ -46,6 +27,7 @@ using i64 = int64_t;
 using byte = u8;
 using uint = u32;
 using String = std::string;
+using StringView = std::string_view;
 using SStream = std::stringstream;
 template <typename E> using List = std::vector<E>;
 template <typename E> using Queue = std::queue<E>;
@@ -55,12 +37,13 @@ using std::make_pair;
 template <typename K, typename V> using Map = std::map<K, V>;
 template <typename... Es> using Tuple = std::tuple<Es...>;
 template <typename T> using Optional = std::optional<T>;
+using NullOpt = std::nullopt_t;
+using std::nullopt;
 template <typename F> using Function = std::function<F>;
 template <size_t... Is> using Seq = std::index_sequence<Is...>;
 template <typename... Ts>
 static constexpr auto SeqFor = std::index_sequence_for<Ts...>();
 template <bool C> using EnableIf = std::enable_if_t<C, bool>;
-template <size_t I, typename... Ts> nth<I, Ts...> Get(const Tuple<Ts...> &t);
 template <typename T> using UPtr = std::unique_ptr<T>;
 using std::make_unique;
 using namespace std::chrono_literals;
@@ -77,17 +60,35 @@ using std::move;
 using std::this_thread::sleep_for;
 using Thread = std::thread;
 
-// type metadata
+inline namespace detail {
+template <size_t I, typename... Ts> struct nth_t;
+} // namespace detail
+template <size_t I, typename... Ts>
+using nth = typename detail::nth_t<I, Ts...>::type;
 
-namespace detail {
+template <size_t I, typename... Ts> nth<I, Ts...> Get(const Tuple<Ts...> &t);
+
+inline namespace detail {
+template <typename T, typename> struct has_repr_t;
+} // namespace detail
+template <typename T>
+constexpr bool has_repr = detail::has_repr_t<T, void>::value;
+
+// see: https://en.cppreference.com/w/cpp/utility/variant/visit
+template <typename... Ts> struct overloads : Ts... {
+  using Ts::operator()...;
+};
+
+// deduction guide needed pre-c++20: https://stackoverflow.com/a/75699136
+template <typename... Ts> overloads(Ts...) -> overloads<Ts...>;
+
+inline namespace detail {
 template <typename T> struct Type {
   static const String name;
 };
 } // namespace detail
 
 template <typename T> static const String type_name = detail::Type<T>::name;
-
-// misc utils
 
 template <typename K, typename V> struct Entry {
   K key;
@@ -121,8 +122,8 @@ template <typename E> List<E> repeat(size_t n, const E &e);
 template <size_t N> List<String> repeat(size_t n, const char (&s)[N]);
 bool in(const String &p, const String &s);
 
-// string representation
-
+template <typename T> String always_repr(const T &v);
+template <typename T, EnableIf<has_repr<T>> = true> String repr(const T &v);
 String repr(char v);
 String repr(signed char v);
 String repr(short v);
@@ -141,23 +142,89 @@ String repr(bool v);
 String repr(const char *v);
 template <size_t N> String repr(const char (&v)[N]);
 String repr(const String &v);
-String repr(const std::string_view &v);
-String repr(const std::nullopt_t &);
+String repr(const StringView &v);
+String repr(const NullOpt &);
 template <typename T> String repr(const Optional<T> &v);
 template <typename E> String repr(const List<E> &v);
 template <typename E> String repr(const Set<E> &v);
+template <typename F, typename S> String repr(const Pair<F, S> &v);
 template <typename K, typename V> String repr(const Map<K, V> &v);
 template <typename... Ts> String repr(const Tuple<Ts...> &v);
+
+inline namespace detail {
+using hlj::repr;
+
+template <typename T, typename> struct reprable_t : std::false_type {};
+
+template <typename T>
+struct reprable_t<T, std::void_t<decltype(repr(std::declval<T>()))>>
+    : std::is_same<decltype(repr(std::declval<T>())), String> {};
+} // namespace detail
+template <typename T>
+constexpr bool reprable = detail::reprable_t<T, void>::value;
 
 template <typename T> String str(const T &v);
 String str(char v);
 String str(const char *v);
 String str(const String &v);
-String str(const std::string_view &v);
+String str(const StringView &v);
 
-// strings
+// inspiration: https://gist.github.com/shoooe/9202235
+class Whatever {
+public:
+  Whatever() : store{nullptr} {}
 
-namespace detail {
+  template <typename T>
+  Whatever(const T &value)
+      : store{make_unique<Concrete<std::decay_t<T>>>(value)} {}
+
+  Whatever(const Whatever &other)
+      : store{other.store ? other.store->copy() : nullptr} {}
+
+  Whatever &operator=(const Whatever &other) {
+    store = other.store ? other.store->copy() : nullptr;
+    return *this;
+  }
+
+  Whatever(Whatever &&other) : store{hlj::move(other.store)} {}
+
+  Whatever &operator=(Whatever &&other) {
+    store = hlj::move(other.store);
+    return *this;
+  }
+
+  template <typename T> const T &as() const {
+    return reinterpret_cast<Concrete<T> *>(store.get())->value;
+  }
+
+  String repr() const;
+
+private:
+  struct Store {
+    virtual ~Store() = 0;
+    virtual UPtr<Store> copy() const = 0;
+    virtual const String &get_type_name() const = 0;
+    virtual String repr() const = 0;
+  };
+
+  template <typename T> struct Concrete : Store {
+    const T value;
+    static const String type_name;
+
+    Concrete(const T &value_) : value{value_} {}
+    ~Concrete() override = default;
+
+    UPtr<Store> copy() const final { return make_unique<Concrete<T>>(value); }
+
+    const String &get_type_name() const final { return type_name; }
+
+    String repr() const final { return always_repr(value); }
+  };
+
+  UPtr<Store> store;
+};
+
+inline namespace detail {
 void format(SStream &ss, size_t &i, const String &s);
 template <typename T, typename... Ts>
 void format(SStream &ss, size_t &i, const String &s, const T &v0,
@@ -220,8 +287,6 @@ String angle_bracket(const String &s,
                      const Bracket::Style &sty = Bracket::Style::Plain);
 String angle_bracket(const String &s, const Indent &ind);
 
-// pattern matching
-
 static constexpr struct Any {
 } any;
 
@@ -272,15 +337,13 @@ Matcher<Function<R()>, Ts...> match_do(const Ts &...values,
 template <typename R = void, typename... Ts>
 Matcher<Function<R()>, Ts...> match_do(const Ts &...values);
 
-// autodispatch
-
 template <typename Dispatcher> class AutoDispatch {
 public:
   AutoDispatch(Dispatcher &&dispatcher, Seconds timeout, Milliseconds interval)
       : dispatcher(move(dispatcher)) {
     const bool live_forever = (timeout == 0s);
     const auto end = now() + timeout;
-    thread = std::thread([=]() {
+    thread = Thread([=]() {
       while (!stop_signaled && (live_forever || now() < end)) {
         dispatcher.dispatch();
         sleep_for(interval);
@@ -334,8 +397,6 @@ private:
 
 } // namespace hlj
 
-// template metaprogramming
-
 template <typename T, typename... Ts> struct hlj::detail::nth_t<0, T, Ts...> {
   using type = T;
 };
@@ -343,7 +404,13 @@ template <typename T, typename... Ts> struct hlj::detail::nth_t<0, T, Ts...> {
 template <size_t I, typename T, typename... Ts>
 struct hlj::detail::nth_t<I, T, Ts...> : nth_t<I - 1, Ts...> {};
 
-// aliases
+template <typename T, typename>
+struct hlj::detail::has_repr_t : std::false_type {};
+
+template <typename T>
+struct hlj::detail::has_repr_t<T,
+                               std::void_t<decltype(std::declval<T>().repr())>>
+    : std::is_same<decltype(std::declval<T>().repr()), String> {};
 
 template <size_t I, typename... Ts>
 inline hlj::nth<I, Ts...> hlj::Get(const Tuple<Ts...> &t) {
@@ -351,8 +418,6 @@ inline hlj::nth<I, Ts...> hlj::Get(const Tuple<Ts...> &t) {
 }
 
 inline hlj::TimePoint hlj::now() { return std::chrono::steady_clock::now(); }
-
-// type metadata
 
 // see: https://stackoverflow.com/a/20170989
 template <typename T>
@@ -434,8 +499,6 @@ template <typename T> struct hlj::detail::Type<hlj::Optional<T>> {
 template <typename T>
 inline const hlj::String hlj::detail::Type<hlj::Optional<T>>::name =
     hlj::format("Optional<{}>", type_name<T>);
-
-// misc utils
 
 inline bool hlj::starts_with(const String &s, const String &p) {
   return (s.size() >= p.size()) && (s.substr(0, p.size()) == p);
@@ -551,7 +614,7 @@ inline hlj::Set<V> hlj::values(const Map<K, V> &m) {
 
 template <typename K, typename V>
 inline hlj::List<hlj::Entry<K, V>> hlj::entries(const Map<K, V> &m) {
-  return map([&](auto k) { return Entry{k, m.at(k)}; }, keys(m));
+  return map([&](auto k) { return Entry<K, V>{k, m.at(k)}; }, keys(m));
 }
 
 template <typename E> inline hlj::List<E> hlj::repeat(size_t n, const E &e) {
@@ -575,7 +638,18 @@ inline bool hlj::in(const String &p, const String &s) {
   return s.find(p) != String::npos;
 }
 
-// string representation
+template <typename T> inline hlj::String hlj::always_repr(const T &v) {
+  if constexpr (reprable<T>) {
+    return repr(v);
+  } else {
+    return format("<unreprable {}>", type_name<T>);
+  }
+}
+
+template <typename T, hlj::EnableIf<hlj::has_repr<T>>>
+inline hlj::String hlj::repr(const T &v) {
+  return v.repr();
+}
 
 inline hlj::String hlj::repr(char v) { return hlj::format("'{}'", String{v}); }
 
@@ -615,37 +689,41 @@ template <size_t N> inline hlj::String hlj::repr(const char (&v)[N]) {
   return hlj::repr(String(v));
 }
 
-inline hlj::String hlj::repr(const std::string_view &v) {
+inline hlj::String hlj::repr(const StringView &v) {
   return hlj::repr(String(v));
 }
 
-inline hlj::String hlj::repr(const std::nullopt_t &) { return "std::nullopt"; }
+inline hlj::String hlj::repr(const NullOpt &) { return "nullopt"; }
 
-template <typename T> inline hlj::String hlj::repr(const std::optional<T> &v) {
-  return v ? repr(*v) : "std::nullopt";
+template <typename T> inline hlj::String hlj::repr(const Optional<T> &v) {
+  return v ? repr(*v) : "nullopt";
 }
 
-template <typename E> inline hlj::String hlj::repr(const std::vector<E> &v) {
+template <typename E> inline hlj::String hlj::repr(const List<E> &v) {
   return format("[{}]",
                 join(", ", map([&](const E &e) { return repr(e); }, v)));
 }
 
-template <typename T> inline hlj::String hlj::repr(const std::set<T> &v) {
+template <typename T> inline hlj::String hlj::repr(const Set<T> &v) {
   return format("{{{}}}",
                 join(", ", map([&](const auto &e) { return repr(e); }, v)));
+}
+
+template <typename F, typename S> hlj::String hlj::repr(const Pair<F, S> &v) {
+  return format("({}, {})", v.first, v.second);
 }
 
 template <typename K, typename V> hlj::String hlj::repr(const Map<K, V> &v) {
   return format("{{{}}}", join(", ", map(
                                          [&](const auto &e) {
-                                           const auto &[k, v] = e;
-                                           return format("{} => {}", k, v);
+                                           return format("{} => {}",
+                                                         repr(e.key),
+                                                         repr(e.value));
                                          },
                                          entries(v))));
 }
 
-template <typename... Ts>
-inline hlj::String hlj::repr(const std::tuple<Ts...> &v) {
+template <typename... Ts> inline hlj::String hlj::repr(const Tuple<Ts...> &v) {
   const auto repr_ = [&](const Ts &...vs) {
     std::vector<String> list;
     (list.push_back(repr(vs)), ...);
@@ -665,9 +743,18 @@ inline hlj::String hlj::str(const char *v) { return v; }
 
 inline hlj::String hlj::str(const String &v) { return v; }
 
-inline hlj::String hlj::str(const std::string_view &v) { return String(v); }
+inline hlj::String hlj::str(const StringView &v) { return String(v); }
 
-// strings
+inline hlj::Whatever::Store::~Store() {};
+
+template <typename T>
+inline const hlj::String hlj::Whatever::Concrete<T>::type_name =
+    hlj::type_name<T>;
+
+inline hlj::String hlj::Whatever::repr() const {
+  return store ? format("{} {}", store->get_type_name(), store->repr())
+               : "nothing";
+}
 
 inline void hlj::detail::format(SStream &ss, size_t &i, const String &s) {
   const size_t n = s.size();
@@ -765,7 +852,7 @@ inline void hlj::print(const String &s, const Ts &...vs) {
 }
 
 template <typename... Ts> inline void hlj::printo(const Ts &...vs) {
-  print(formato(vs...));
+  printf("%s\n", formato(vs...).c_str());
 }
 
 inline hlj::String hlj::Indent::apply(const String &s) const {
@@ -873,8 +960,6 @@ inline hlj::String hlj::angle_bracket(const String &s,
 inline hlj::String hlj::angle_bracket(const String &s, const Indent &indent) {
   return Bracket{Bracket::Kind::AngleBrackets, indent}.apply(s);
 }
-
-// pattern matching
 
 template <typename T>
 hlj::Match<T>::Match(Function<bool(const T &)> pred_) : pred(pred_) {}
