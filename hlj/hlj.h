@@ -18,16 +18,12 @@ namespace hlj {
 
 // template metaprogramming
 
+namespace detail {
 template <size_t I, typename... Ts> struct nth_t;
+} // namespace detail
 
-template <typename T, typename... Ts> struct nth_t<0, T, Ts...> {
-  using type = T;
-};
-
-template <size_t I, typename T, typename... Ts>
-struct nth_t<I, T, Ts...> : nth_t<I - 1, Ts...> {};
-
-template <size_t I, typename... Ts> using nth = typename nth_t<I, Ts...>::type;
+template <size_t I, typename... Ts>
+using nth = typename detail::nth_t<I, Ts...>::type;
 
 // see: https://en.cppreference.com/w/cpp/utility/variant/visit
 template <typename... Ts> struct overloads : Ts... {
@@ -39,23 +35,34 @@ template <typename... Ts> overloads(Ts...) -> overloads<Ts...>;
 
 // aliases
 
-using uint = unsigned int;
+using u8 = uint8_t;
+using u16 = uint16_t;
+using u32 = uint32_t;
+using u64 = uint64_t;
+using i8 = int8_t;
+using i16 = int16_t;
+using i32 = int32_t;
+using i64 = int64_t;
+using byte = u8;
+using uint = u32;
 using String = std::string;
+using SStream = std::stringstream;
 template <typename E> using List = std::vector<E>;
 template <typename E> using Queue = std::queue<E>;
 template <typename E> using Set = std::set<E>;
 template <typename F, typename S> using Pair = std::pair<F, S>;
+using std::make_pair;
 template <typename K, typename V> using Map = std::map<K, V>;
 template <typename... Es> using Tuple = std::tuple<Es...>;
 template <typename T> using Optional = std::optional<T>;
-// template <typename R, typename... As> using Function =
-// std::function<R(As...)>;
 template <typename F> using Function = std::function<F>;
 template <size_t... Is> using Seq = std::index_sequence<Is...>;
 template <typename... Ts>
 static constexpr auto SeqFor = std::index_sequence_for<Ts...>();
 template <bool C> using EnableIf = std::enable_if_t<C, bool>;
 template <size_t I, typename... Ts> nth<I, Ts...> Get(const Tuple<Ts...> &t);
+template <typename T> using UPtr = std::unique_ptr<T>;
+using std::make_unique;
 using namespace std::chrono_literals;
 using Nanoseconds = std::chrono::nanoseconds;
 using Microseconds = std::chrono::microseconds;
@@ -148,19 +155,21 @@ String str(const char *v);
 String str(const String &v);
 String str(const std::string_view &v);
 
-// string formatting
+// strings
 
 namespace detail {
-void format(std::stringstream &ss, size_t &i, const String &s);
+void format(SStream &ss, size_t &i, const String &s);
 template <typename T, typename... Ts>
-void format(std::stringstream &ss, size_t &i, const String &s, const T &v0,
+void format(SStream &ss, size_t &i, const String &s, const T &v0,
             const Ts &...vs);
-
 } // namespace detail
-
 template <typename... Ts> String format(const String &s, const Ts &...vs);
+// todo: format(const Ts &...) possible?
+template <typename... Ts> String formato(const Ts &...vs);
 
-// string manipulation
+void print();
+template <typename... Ts> void print(const String &s, const Ts &...vs);
+template <typename... Ts> void printo(const Ts &...vs);
 
 struct Indent {
   size_t stop = 1;
@@ -325,6 +334,15 @@ private:
 
 } // namespace hlj
 
+// template metaprogramming
+
+template <typename T, typename... Ts> struct hlj::detail::nth_t<0, T, Ts...> {
+  using type = T;
+};
+
+template <size_t I, typename T, typename... Ts>
+struct hlj::detail::nth_t<I, T, Ts...> : nth_t<I - 1, Ts...> {};
+
 // aliases
 
 template <size_t I, typename... Ts>
@@ -338,14 +356,14 @@ inline hlj::TimePoint hlj::now() { return std::chrono::steady_clock::now(); }
 
 // see: https://stackoverflow.com/a/20170989
 template <typename T>
-const hlj::String hlj::detail::Type<T>::name = []() {
+inline const hlj::String hlj::detail::Type<T>::name = []() {
   using TR = std::remove_reference_t<T>;
 
   std::unique_ptr<char, void (*)(void *)> own(
       abi::__cxa_demangle(typeid(TR).name(), nullptr, nullptr, nullptr),
       std::free);
 
-  std::stringstream r;
+  SStream r;
   r << own.get();
 
   if (std::is_const_v<TR>) {
@@ -364,6 +382,58 @@ const hlj::String hlj::detail::Type<T>::name = []() {
 
   return r.str();
 }();
+
+template <>
+inline const hlj::String hlj::detail::Type<hlj::String>::name = "String";
+
+template <typename E> struct hlj::detail::Type<hlj::List<E>> {
+  static const String name;
+};
+template <typename E>
+inline const hlj::String hlj::detail::Type<hlj::List<E>>::name =
+    hlj::format("List<{}>", type_name<E>);
+
+template <typename E> struct hlj::detail::Type<hlj::Queue<E>> {
+  static const String name;
+};
+template <typename E>
+inline const hlj::String hlj::detail::Type<hlj::Queue<E>>::name =
+    hlj::format("Queue<{}>", type_name<E>);
+
+template <typename E> struct hlj::detail::Type<hlj::Set<E>> {
+  static const String name;
+};
+template <typename E>
+inline const hlj::String hlj::detail::Type<hlj::Set<E>>::name =
+    hlj::format("Set<{}>", type_name<E>);
+
+template <typename F, typename S> struct hlj::detail::Type<hlj::Pair<F, S>> {
+  static const String name;
+};
+template <typename F, typename S>
+inline const hlj::String hlj::detail::Type<hlj::Pair<F, S>>::name =
+    hlj::format("Pair<{}, {}>", type_name<F>, type_name<S>);
+
+template <typename K, typename V> struct hlj::detail::Type<hlj::Map<K, V>> {
+  static const String name;
+};
+template <typename K, typename V>
+inline const hlj::String hlj::detail::Type<hlj::Map<K, V>>::name =
+    hlj::format("Map<{}, {}>", type_name<K>, type_name<V>);
+
+template <typename... Ts> struct hlj::detail::Type<hlj::Tuple<Ts...>> {
+  static const String name;
+};
+template <typename... Ts>
+inline const hlj::String hlj::detail::Type<hlj::Tuple<Ts...>>::name =
+    hlj::format("Tuple<{}>", join(", ", {type_name<Ts>...}));
+
+template <typename T> struct hlj::detail::Type<hlj::Optional<T>> {
+  static const String name;
+};
+template <typename T>
+inline const hlj::String hlj::detail::Type<hlj::Optional<T>>::name =
+    hlj::format("Optional<{}>", type_name<T>);
 
 // misc utils
 
@@ -397,7 +467,7 @@ inline hlj::List<char> hlj::as_list(const String &s) {
 template <typename E>
 inline hlj::List<hlj::Pair<size_t, E>> hlj::enumerate(const List<E> &l) {
   size_t i = 0;
-  return map([&](E e) { return std::make_pair(i++, e); }, l);
+  return map([&](E e) { return make_pair(i++, e); }, l);
 }
 
 inline hlj::List<hlj::Pair<size_t, char>> hlj::enumerate(const String &s) {
@@ -405,7 +475,7 @@ inline hlj::List<hlj::Pair<size_t, char>> hlj::enumerate(const String &s) {
 }
 
 inline hlj::String hlj::join(String sep, const List<String> &l) {
-  std::stringstream r;
+  SStream r;
   for (auto const &[i, s] : enumerate(l)) {
     if (i) {
       r << sep;
@@ -597,10 +667,9 @@ inline hlj::String hlj::str(const String &v) { return v; }
 
 inline hlj::String hlj::str(const std::string_view &v) { return String(v); }
 
-// string formatting
+// strings
 
-inline void hlj::detail::format(std::stringstream &ss, size_t &i,
-                                const String &s) {
+inline void hlj::detail::format(SStream &ss, size_t &i, const String &s) {
   const size_t n = s.size();
   while (i < n) {
     const char c = s[i++];
@@ -632,8 +701,8 @@ inline void hlj::detail::format(std::stringstream &ss, size_t &i,
 }
 
 template <typename T, typename... Ts>
-inline void hlj::detail::format(std::stringstream &ss, size_t &i,
-                                const String &s, const T &v0, const Ts &...vs) {
+inline void hlj::detail::format(SStream &ss, size_t &i, const String &s,
+                                const T &v0, const Ts &...vs) {
   const size_t n = s.size();
   bool flag = false;
   while (i < n) {
@@ -678,17 +747,30 @@ inline void hlj::detail::format(std::stringstream &ss, size_t &i,
 
 template <typename... Ts>
 inline hlj::String hlj::format(const String &s, const Ts &...vs) {
-  std::stringstream ss;
+  SStream ss;
   size_t i = 0;
   detail::format(ss, i, s, vs...);
   return ss.str();
 }
 
-// string manipulation
+template <typename... Ts> inline hlj::String hlj::formato(const Ts &...vs) {
+  return join(" ", repeat(sizeof...(Ts), "{}"), vs...);
+}
+
+inline void hlj::print() { printf("\n"); }
+
+template <typename... Ts>
+inline void hlj::print(const String &s, const Ts &...vs) {
+  printf("%s\n", format(s, vs...).c_str());
+}
+
+template <typename... Ts> inline void hlj::printo(const Ts &...vs) {
+  print(formato(vs...));
+}
 
 inline hlj::String hlj::Indent::apply(const String &s) const {
-  const std::string tab(stop * size, ' ');
-  std::stringstream r;
+  const String tab(stop * size, ' ');
+  SStream r;
   r << tab;
   const size_t n = s.size();
   for (const auto &[i, c] : enumerate(s)) {
@@ -715,9 +797,9 @@ inline hlj::Indent hlj::Indent::operator+(size_t delta) const {
   return {stop + delta, size};
 }
 
-inline std::string hlj::Bracket::apply(const std::string &s) const {
-  std::string open;
-  std::string close;
+inline hlj::String hlj::Bracket::apply(const std::string &s) const {
+  String open;
+  String close;
   switch (kind) {
   case Kind::Parentheses:
     open = "(";
@@ -758,40 +840,37 @@ inline hlj::String hlj::indent(const String &s, const Indent &ind) {
   return ind + s;
 }
 
-inline hlj::String hlj::bracket(const std::string &s, const Bracket &bracket) {
+inline hlj::String hlj::bracket(const String &s, const Bracket &bracket) {
   return bracket.apply(s);
 }
 
-inline hlj::String hlj::bracket(const std::string &s, const Indent &indent) {
+inline hlj::String hlj::bracket(const String &s, const Indent &indent) {
   return Bracket{Bracket::Kind::Brackets, indent}.apply(s);
 }
 
-inline hlj::String hlj::parenthesize(const std::string &s,
+inline hlj::String hlj::parenthesize(const String &s,
                                      const Bracket::Style &style) {
   return Bracket{Bracket::Kind::Parentheses, style}.apply(s);
 }
 
-inline hlj::String hlj::parenthesize(const std::string &s,
-                                     const Indent &indent) {
+inline hlj::String hlj::parenthesize(const String &s, const Indent &indent) {
   return Bracket{Bracket::Kind::Parentheses, indent}.apply(s);
 }
 
-inline hlj::String hlj::brace(const std::string &s,
-                              const Bracket::Style &style) {
+inline hlj::String hlj::brace(const String &s, const Bracket::Style &style) {
   return Bracket{Bracket::Kind::Braces, style}.apply(s);
 }
 
-inline hlj::String hlj::brace(const std::string &s, const Indent &indent) {
+inline hlj::String hlj::brace(const String &s, const Indent &indent) {
   return Bracket{Bracket::Kind::Braces, indent}.apply(s);
 }
 
-inline hlj::String hlj::angle_bracket(const std::string &s,
+inline hlj::String hlj::angle_bracket(const String &s,
                                       const Bracket::Style &style) {
   return Bracket{Bracket::Kind::AngleBrackets, style}.apply(s);
 }
 
-inline hlj::String hlj::angle_bracket(const std::string &s,
-                                      const Indent &indent) {
+inline hlj::String hlj::angle_bracket(const String &s, const Indent &indent) {
   return Bracket{Bracket::Kind::AngleBrackets, indent}.apply(s);
 }
 
