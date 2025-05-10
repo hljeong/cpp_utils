@@ -150,10 +150,19 @@ static constexpr Index index = IndexOf<T, Ts...>::value;
 inline namespace detail {
 template <typename T, typename> struct HasRepr : std::false_type {};
 template <typename T>
-struct HasRepr<T, Void<decltype(declval<T>().repr())>>
-    : IsSame<decltype(declval<T>().repr()), String> {};
+struct HasRepr<T, Void<decltype(declval<const T>().repr())>>
+    : IsSame<decltype(declval<const T>().repr()), String> {};
 } // namespace detail
 template <typename T> constexpr bool has_repr = detail::HasRepr<T, void>::value;
+
+inline namespace detail {
+template <typename T, typename> struct HasEquals : std::false_type {};
+template <typename T>
+struct HasEquals<T, Void<decltype(declval<const T>() == declval<const T>())>>
+    : IsSame<decltype(declval<const T>() == declval<const T>()), bool> {};
+} // namespace detail
+template <typename T>
+constexpr bool has_equals = detail::HasEquals<T, void>::value;
 
 // see: https://en.cppreference.com/w/cpp/utility/variant/visit
 template <typename... Ts> struct Overloads : Ts... {
@@ -328,9 +337,11 @@ public:
     return *this;
   }
 
-  template <typename T> const T &as() const {
-    return reinterpret_cast<Concrete<T> *>(store.get())->value;
+  inline bool operator==(const Whatever &other) const {
+    return store ? store->equals(*other.store) : !other.store;
   }
+
+  template <typename T> inline const T &as() const { return store->as<T>(); }
 
   String repr() const;
 
@@ -348,6 +359,15 @@ private:
     virtual UPtr<Store> copy() const = 0;
     virtual const TypeInfo &get_type_info() const = 0;
     virtual String repr() const = 0;
+    virtual bool equals(const Store &other) const = 0;
+
+    template <typename T> inline bool is() const {
+      return get_type_info() == type_info<T>;
+    }
+
+    template <typename T> inline const T &as() const {
+      return dynamic_cast<const Concrete<T> &>(*this).value;
+    }
   };
 
   template <typename T> struct Concrete : Store {
@@ -358,6 +378,17 @@ private:
     UPtr<Store> copy() const final { return make_unique<Concrete<T>>(value); }
     const TypeInfo &get_type_info() const final { return type_info<T>; }
     String repr() const final { return always_repr(value); }
+    bool equals(const Store &other) const final {
+      if (!other.is<T>()) {
+        return false;
+      }
+      const T &other_value = other.as<T>();
+      if constexpr (has_equals<T>) {
+        return value == other_value;
+      } else {
+        return &value == &other_value;
+      }
+    }
   };
 
   UPtr<Store> store;
@@ -381,6 +412,8 @@ public:
     which = other.which;
     other.which = sizeof...(Ts);
   }
+
+  bool operator==(const OneOf &other) const { return store == other.store; }
 
   template <typename T, size_t I = index<T, Ts...>> inline bool is() const {
     return which == I;

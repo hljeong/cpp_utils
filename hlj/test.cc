@@ -67,6 +67,8 @@ struct S5 {
 
 static constexpr struct Nil {
   String repr() const { return "nil"; }
+
+  bool operator==(Nil) const { return true; }
 } nil;
 
 template <typename T> struct Cons;
@@ -74,6 +76,10 @@ template <typename T> using ConsList = OneOf<Cons<T>, Nil>;
 template <typename T> struct Cons {
   T car;
   ConsList<T> cdr;
+
+  bool operator==(const Cons<T> &other) const {
+    return (car == other.car) && (cdr == other.cdr);
+  }
 };
 
 template <typename T> ConsList<T> cons(const T &car, const ConsList<T> &cdr) {
@@ -88,6 +94,18 @@ template <typename T> String repr(const ConsList<T> &value) {
         return format("cons({}, {})", repr(cons.car), cons.cdr);
       },
       [](Nil) { return "nil"; },
+  });
+}
+
+template <typename T> Optional<T> last(const ConsList<T> &list) {
+  return list.template match<Optional<T>>({
+      [](const Cons<T> &cons) {
+        return match<Optional<T>>(cons.car, cons.cdr)({
+            {{any, {nil}}, [&cons]() { return cons.car; }},
+            {any, [&cons]() { return last(cons.cdr); }},
+        });
+      },
+      [](Nil) { return nullopt; },
   });
 }
 
@@ -139,6 +157,12 @@ int main() {
 
   assert(repr(cons(String{"hello"}, cons(String{"world"}, {nil}))) ==
          "cons(\"hello\", cons(\"world\", nil))");
+
+  auto le = last(cons(1, cons(2, {nil})));
+  assert(le.has_value());
+  assert(*le == 2);
+
+  assert(!last<int>({nil}));
 
   OneOf<int, char> p = 3;
   auto q = p;
