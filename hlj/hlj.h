@@ -38,6 +38,10 @@ using False = std::false_type;
 template <typename T, typename U> using IsSame = std::is_same<T, U>;
 template <typename T, typename U>
 static constexpr bool is_same = IsSame<T, U>::value;
+template <typename T, typename U>
+using IsConvertible = std::is_convertible<T, U>;
+template <typename T, typename U>
+static constexpr bool is_convertible = IsConvertible<T, U>::value;
 template <typename T> using Void = std::void_t<T>;
 using std::declval;
 template <typename E> using List = std::vector<E>;
@@ -103,7 +107,7 @@ template <typename T> static const TypeInfo &type_info = type<T>;
 template <typename T> static const TypeId &type_id = Type<T>::type_id;
 template <typename T> static const String type_name = Type<T>::name;
 
-// todo: search second pass with `is_constructible_v<>`?
+// todo: search second pass with is_convertible?
 inline namespace detail {
 template <typename T, typename... Ts> struct IsIn : False {};
 template <typename T, typename... Ts> struct IsIn<T, T, Ts...> : True {};
@@ -129,7 +133,7 @@ struct Undefined {
   static Undefined value;
 };
 
-// todo: search second pass with `is_constructible_v<>`?
+// todo: search second pass with is_convertible?
 template <typename T, typename... Ts> struct IndexOf : NotFound {};
 
 template <typename T, typename... Ts> struct IndexOf<T, T, Ts...> {
@@ -152,12 +156,12 @@ struct HasRepr<T, Void<decltype(declval<T>().repr())>>
 template <typename T> constexpr bool has_repr = detail::HasRepr<T, void>::value;
 
 // see: https://en.cppreference.com/w/cpp/utility/variant/visit
-template <typename... Ts> struct overloads : Ts... {
+template <typename... Ts> struct Overloads : Ts... {
   using Ts::operator()...;
 };
 
 // deduction guide needed pre-c++20: https://stackoverflow.com/a/75699136
-template <typename... Ts> overloads(Ts...) -> overloads<Ts...>;
+template <typename... Ts> Overloads(Ts...) -> Overloads<Ts...>;
 
 template <Index I, typename... Ts>
 inline nth<I, Ts...> Get(const Tuple<Ts...> &t) {
@@ -266,10 +270,9 @@ private:
 template <typename... Ts> class Pattern {
 public:
   Pattern(const Match<Ts> &...pattern_);
-  // todo: only do std::is_convertible_v on second pass?
-  template <typename T,
-            EnableIf<(sizeof...(Ts) == 1) &&
-                     std::is_convertible_v<T, nth<0, Ts...>>> = true>
+  // todo: only do is_convertible on second pass?
+  template <typename T, EnableIf<(sizeof...(Ts) == 1) &&
+                                 is_convertible<T, nth<0, Ts...>>> = true>
   Pattern(const T &pattern_) : pattern(Match<nth<0, Ts...>>(pattern_)) {}
   Pattern(Any);
 
@@ -389,16 +392,19 @@ public:
 
   inline String repr() const { return store.repr(); }
 
-  // todo: put some more rigor into this, e.g. must have exactly sizeof...(Ts)
-  // entries
-  template <typename R>
-  R match(const Whatever::PatternMap<R> &type_results) const {
-    return store.match(type_results);
-  }
+  template <typename T> struct Required : T {
+    Required() = delete;
+    template <typename... As>
+    Required(As... args) : T(std::forward<As>(args)...) {}
+  };
 
+  // todo: pass lambdas in directly and allow for permutations
   template <typename R>
-  inline R eager_match(const Whatever::EagerPatternMap<R> &type_results) const {
-    return store.eager_match(type_results);
+  using Matcher = Overloads<Required<Function<R(const Ts &)>>...>;
+  template <typename R> inline R match(const Matcher<R> &type_results) const {
+    return store.match<R>({{type<Ts>, [this, &type_results]() {
+                              return type_results(store.as<Ts>());
+                            }}...});
   }
 
 private:

@@ -82,21 +82,12 @@ template <typename T> ConsList<T> cons(const T &car, const ConsList<T> &cdr) {
 
 template <typename T> Cons(const T &, const ConsList<T> &) -> Cons<T>;
 
-template <typename T> const T &car(const Cons<T> &cons) { return cons.car; }
-
-template <typename T> const ConsList<T> &cdr(const Cons<T> &cons) {
-  return cons.cdr;
-}
-
-// todo: unwrap value
 template <typename T> String repr(const ConsList<T> &value) {
   return value.template match<String>({
-      {type<Nil>, []() { return "nil"; }},
-      {type<Cons<T>>,
-       [&]() {
-         return format("cons({}, {})", repr(car(value.template as<Cons<T>>())),
-                       repr(cdr(value.template as<Cons<T>>())));
-       }},
+      [](const Cons<T> &cons) {
+        return format("cons({}, {})", repr(cons.car), cons.cdr);
+      },
+      [](Nil) { return "nil"; },
   });
 }
 
