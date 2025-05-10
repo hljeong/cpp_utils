@@ -5,75 +5,92 @@
 
 using namespace hlj;
 
+// todo: Whatever::match() and OneOf::match()
+// todo: has_signature<F, R(As...)>
 // todo: use a real test framework
 
 static constexpr struct Unreprable {
 } unreprable;
 
-// todo: search second pass with `is_constructible_v<>`?
-template <typename T, typename... Ts> struct index_t;
-
-template <typename T, typename... Ts> struct index_t<T, T, Ts...> {
-  static constexpr size_t value = 0;
+struct S1 {
+  int x;
 };
 
-template <typename T, typename U, typename... Ts> struct index_t<T, U, Ts...> {
-  static constexpr size_t value = 1 + index_t<T, Ts...>::value;
+String repr(S1 value) { return format("S1(x={})", value.x); };
+
+namespace ns1 {
+
+struct S2 {
+  S1 s;
+  char c;
 };
 
-template <typename T, typename... Ts>
-static constexpr size_t index = index_t<T, Ts...>::value;
+String repr(S2 value) {
+  return format("S2(s={}, c={})", repr(value.s), hlj::repr(value.c));
+};
 
-template <typename... Ts> class OneOf {
-public:
-  template <typename T, size_t I = index<T, Ts...>>
-  OneOf(const T &value) : store{value}, which{I} {}
+} // namespace ns1
 
-  template <typename T, size_t I = index<T, Ts...>> bool is() const {
-    return which == I;
+namespace ns2 {
+
+struct S3 {
+  S1 s1;
+  ns1::S2 s2;
+  float f;
+};
+
+String repr(S3 value) {
+  return format("S3(s1={}, s2={}, f={})", value.s1, value.s2, value.f);
+}
+
+} // namespace ns2
+
+struct S4 {
+  int y;
+
+  String repr() const { return format("S4(y={})", y); }
+};
+
+namespace ns3 {
+
+struct S5 {
+  S4 s;
+  char h;
+
+  String repr() const {
+    // using namespace hlj; // this would not resolve the repr()'s
+    using hlj::repr;
+    return format("S5(s={}, h={})", repr(s), repr(h));
   }
-
-  template <typename T, size_t = index<T, Ts...>> const T &as() const {
-    return store.as<T>();
-  }
-
-  String repr() const { return store.repr(); }
-
-private:
-  Whatever store;
-  size_t which;
 };
 
-// todo: move OneOf into hlj.h
-// todo: un-inline Whatever (and OneOf) impl
-// todo: custom struct + repr defined in/outside namespace
-// todo: custom struct + repr method defined in/outside namespace
+} // namespace ns3
 
 static constexpr struct Nil {
   String repr() const { return "nil"; }
 } nil;
 
-template <typename T> struct ConsCell;
-template <typename T> struct ConsList : OneOf<ConsCell<T>, Nil> {};
-template <typename T> struct ConsCell {
+template <typename T> struct Cons;
+template <typename T> using ConsList = OneOf<Cons<T>, Nil>;
+template <typename T> struct Cons {
   T value;
   ConsList<T> rest;
 };
 
 template <typename T>
-ConsList<T> cons(const T &value, const ConsList<T> &rest = {nil}) {
-  return ConsList{ConsCell{value, rest}};
+ConsList<T> cons(const T &value, const ConsList<T> &rest) {
+  return Cons{value, rest};
 }
 
-template <typename T> ConsCell(const T &, const ConsList<T> &) -> ConsCell<T>;
+template <typename T> Cons(const T &, const ConsList<T> &) -> Cons<T>;
 
-template <typename T> ConsList(const ConsCell<T> &) -> ConsList<T>;
+// template <typename T> ConsList(const Cons<T> &) -> ConsList<T>;
 
 template <typename T> const T &car(const ConsList<T> &list) {
   if (list.template is<Nil>()) {
     throw std::invalid_argument("empty list");
   } else {
-    return list.template as<ConsCell<T>>().value;
+    return list.template as<Cons<T>>().value;
   }
 }
 
@@ -81,12 +98,12 @@ template <typename T> const ConsList<T> &cdr(const ConsList<T> &list) {
   if (list.template is<Nil>()) {
     throw std::invalid_argument("empty list");
   } else {
-    return list.template as<ConsCell<T>>().rest;
+    return list.template as<Cons<T>>().rest;
   }
 }
 
 template <typename T> String repr(const ConsList<T> &value) {
-  if (value.template is<ConsCell<T>>()) {
+  if (value.template is<Cons<T>>()) {
     return format("cons({}, {})", repr(car(value)), cdr(value));
   } else {
     return "nil";
@@ -131,11 +148,26 @@ int main() {
   y = String("hi");
   assert(repr(y) == "String \"hi\"");
 
-  assert(always_repr(unreprable) == "<unreprable Unreprable>");
-  assert(repr(Whatever{unreprable}) == "Unreprable <unreprable Unreprable>");
+  assert(always_repr(unreprable) == "<Unreprable>");
+  assert(repr(Whatever{unreprable}) == "Unreprable <Unreprable>");
 
   assert(repr(cons(1, cons(2, {nil}))) == "cons(1, cons(2, nil))");
 
   assert(repr(cons(String{"hello"}, cons(String{"world"}, {nil}))) ==
          "cons(\"hello\", cons(\"world\", nil))");
+
+  OneOf<int, char> p = 3;
+  auto q = p;
+  assert(repr(q) == "int 3");
+
+  auto r = std::move(p);
+  assert(repr(q) == "int 3");
+  assert(repr(r) == "int 3");
+  assert(repr(p) == "nothing");
+  assert((!p.is<int>()) && (!p.is<char>()));
+
+  assert(repr(ns2::S3{.s1 = S1{1}, .s2 = ns1::S2{S1{2}, '3'}, .f = 3.14f}) ==
+         "S3(s1=S1(x=1), s2=S2(s=S1(x=2), c='3'), f=3.140000)");
+
+  assert(repr(ns3::S5{S4{4}, 'x'}) == "S5(s=S4(y=4), h='x')");
 }
