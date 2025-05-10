@@ -13,6 +13,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <typeinfo>
 
 namespace hlj {
 
@@ -47,12 +48,15 @@ template <typename T> using Optional = std::optional<T>;
 using NullOpt = std::nullopt_t;
 using std::nullopt;
 template <typename F> using Function = std::function<F>;
+template <typename T> using Decay = std::decay<T>;
+template <typename T> using decay = typename Decay<T>::type;
 template <Index... Is> using Seq = std::index_sequence<Is...>;
 template <typename... Ts>
 static constexpr auto SeqFor = std::index_sequence_for<Ts...>();
 template <bool C> using EnableIf = std::enable_if_t<C, bool>;
 template <typename T> using UPtr = std::unique_ptr<T>;
 using std::make_unique;
+using TypeId = std::type_info;
 using namespace std::chrono_literals;
 using Nanoseconds = std::chrono::nanoseconds;
 using Microseconds = std::chrono::microseconds;
@@ -66,16 +70,35 @@ inline TimePoint now() { return std::chrono::steady_clock::now(); }
 using std::this_thread::sleep_for;
 using Thread = std::thread;
 
-inline namespace detail {
-template <typename T> struct Type {
-  using type = T;
+struct TypeInfo {
+  virtual const TypeId &get_type_id() const = 0;
+  virtual const String &get_name() const = 0;
+  virtual String repr() const = 0;
+
+  bool operator==(const TypeInfo &other) const {
+    return get_type_id() == other.get_type_id();
+  }
+};
+
+template <typename T> struct TypeName {
   static const String name;
 };
-template <>
-inline const hlj::String hlj::detail::Type<hlj::String>::name = "String";
-} // namespace detail
 
-template <typename T> static const String type_name = detail::Type<T>::name;
+template <typename T> struct Type : TypeInfo {
+  using type = T;
+  static constexpr const TypeId &type_id{typeid(T)};
+  inline static const String name = TypeName<T>::name;
+
+  const TypeId &get_type_id() const final { return type_id; }
+  const String &get_name() const final { return name; }
+  String repr() const final;
+};
+template <> inline const String TypeName<String>::name = "String";
+
+template <typename T> static const Type<T> type = Type<T>{};
+template <typename T> static const TypeInfo &type_info = type<T>;
+template <typename T> static const TypeId &type_id = Type<T>::type_id;
+template <typename T> static const String type_name = Type<T>::name;
 
 // todo: search second pass with `is_constructible_v<>`?
 inline namespace detail {
@@ -221,14 +244,63 @@ String str(const char *v);
 String str(const String &v);
 String str(const StringView &v);
 
+static constexpr struct Any {
+} any;
+
+template <typename T> class Match {
+public:
+  Match(Function<bool(const T &)> pred_);
+  Match();
+  template <typename... Ts> Match(const T &match, const Ts &...rest);
+  Match(Any);
+
+  bool match(const T &value) const;
+
+private:
+  Function<bool(const T &)> pred;
+};
+
+template <typename... Ts> class Pattern {
+public:
+  Pattern(const Match<Ts> &...pattern_);
+  template <typename... Us, EnableIf<sizeof...(Ts) == 1> = true>
+  Pattern(const Us &...pattern_);
+  Pattern(Any);
+
+  bool match(const Ts &...values) const;
+
+private:
+  Tuple<Match<Ts>...> pattern;
+
+  // todo: ugly
+  bool match_any = false;
+
+  template <Index... Is> bool match(Seq<Is...>, const Ts &...args) const;
+};
+
+template <typename R, typename... Ts>
+using Matcher = Function<R(const List<Pair<Pattern<Ts...>, R>> &)>;
+
+template <typename R = void, typename... Ts>
+Matcher<R, Ts...> match(const Ts &...values, const R &default_result);
+
+template <typename R = void, typename... Ts>
+Matcher<R, Ts...> match(const Ts &...values);
+
+template <typename R = void, typename... Ts>
+Matcher<Function<R()>, Ts...> match_do(const Ts &...values,
+                                       const R &default_result);
+
+template <typename R = void, typename... Ts>
+Matcher<Function<R()>, Ts...> lazy_match(const Ts &...values);
+
 // inspiration: https://gist.github.com/shoooe/9202235
 class Whatever {
 public:
   Whatever() : store{nullptr} {}
 
   template <typename T>
-  Whatever(const T &value)
-      : store{make_unique<Concrete<std::decay_t<T>>>(value)} {}
+  Whatever(const T &value) : store{make_unique<Concrete<decay<T>>>(value)} {}
 
   Whatever(const Whatever &other)
       : store{other.store ? other.store->copy() : nullptr} {}
@@ -251,25 +323,28 @@ public:
 
   String repr() const;
 
+  template <typename R>
+  using Matcher = List<Pair<Pattern<const TypeInfo &>, R>>;
+  template <typename R> R match(const Matcher<R> &type_results);
+
+  template <typename R> using LazyMatcher = Matcher<Function<R()>>;
+  template <typename R> R lazy_match(const LazyMatcher<R> &type_results);
+
 private:
   struct Store {
     virtual ~Store() = 0;
     virtual UPtr<Store> copy() const = 0;
-    virtual const String &get_type_name() const = 0;
+    virtual const TypeInfo &get_type_info() const = 0;
     virtual String repr() const = 0;
   };
 
   template <typename T> struct Concrete : Store {
     const T value;
-    static const String type_name;
 
     Concrete(const T &value_) : value{value_} {}
     ~Concrete() override = default;
-
     UPtr<Store> copy() const final { return make_unique<Concrete<T>>(value); }
-
-    const String &get_type_name() const final { return type_name; }
-
+    const TypeInfo &get_type_info() const final { return type_info<T>; }
     String repr() const final { return always_repr(value); }
   };
 
@@ -373,56 +448,6 @@ String angle_bracket(const String &s,
                      const Bracket::Style &sty = Bracket::Style::Plain);
 String angle_bracket(const String &s, const Indent &ind);
 
-static constexpr struct Any {
-} any;
-
-template <typename T> class Match {
-public:
-  Match(Function<bool(const T &)> pred_);
-  Match();
-  template <typename... Ts> Match(const T &match, const Ts &...rest);
-  Match(Any);
-
-  bool match(const T &value) const;
-
-private:
-  Function<bool(const T &)> pred;
-};
-
-template <typename... Ts> class Pattern {
-public:
-  Pattern(const Match<Ts> &...pattern_);
-  template <typename... Us, EnableIf<sizeof...(Ts) == 1> = true>
-  Pattern(const Us &...pattern_);
-  Pattern(Any);
-
-  bool match(const Ts &...values) const;
-
-private:
-  Tuple<Match<Ts>...> pattern;
-
-  // todo: ugly
-  bool match_any = false;
-
-  template <Index... Is> bool match(Seq<Is...>, const Ts &...args) const;
-};
-
-template <typename R, typename... Ts>
-using Matcher = Function<R(const List<Pair<Pattern<Ts...>, R>> &)>;
-
-template <typename R = void, typename... Ts>
-Matcher<R, Ts...> match(const Ts &...values, const R &default_result);
-
-template <typename R = void, typename... Ts>
-Matcher<R, Ts...> match(const Ts &...values);
-
-template <typename R = void, typename... Ts>
-Matcher<Function<R()>, Ts...> match_do(const Ts &...values,
-                                       const R &default_result);
-
-template <typename R = void, typename... Ts>
-Matcher<Function<R()>, Ts...> match_do(const Ts &...values);
-
 template <typename Dispatcher> class AutoDispatch {
 public:
   AutoDispatch(Dispatcher &&dispatcher, Seconds timeout, Milliseconds interval)
@@ -486,7 +511,7 @@ private:
 
 // see: https://stackoverflow.com/a/20170989
 template <typename T>
-inline const hlj::String hlj::detail::Type<T>::name = []() {
+inline const hlj::String hlj::TypeName<T>::name = []() {
   using TR = std::remove_reference_t<T>;
 
   std::unique_ptr<char, void (*)(void *)> own(
@@ -513,54 +538,54 @@ inline const hlj::String hlj::detail::Type<T>::name = []() {
   return r.str();
 }();
 
-template <typename E> struct hlj::detail::Type<hlj::List<E>> {
+template <typename E> struct hlj::TypeName<hlj::List<E>> {
   static const String name;
 };
 template <typename E>
-inline const hlj::String hlj::detail::Type<hlj::List<E>>::name =
-    hlj::format("List<{}>", type_name<E>);
+inline const hlj::String hlj::TypeName<hlj::List<E>>::name =
+    format("List<{}>", type_name<E>);
 
-template <typename E> struct hlj::detail::Type<hlj::Queue<E>> {
+template <typename E> struct hlj::TypeName<hlj::Queue<E>> {
   static const String name;
 };
 template <typename E>
-inline const hlj::String hlj::detail::Type<hlj::Queue<E>>::name =
-    hlj::format("Queue<{}>", type_name<E>);
+inline const hlj::String hlj::TypeName<hlj::Queue<E>>::name =
+    format("Queue<{}>", type_name<E>);
 
-template <typename E> struct hlj::detail::Type<hlj::Set<E>> {
+template <typename E> struct hlj::TypeName<hlj::Set<E>> {
   static const String name;
 };
 template <typename E>
-inline const hlj::String hlj::detail::Type<hlj::Set<E>>::name =
-    hlj::format("Set<{}>", type_name<E>);
+inline const hlj::String hlj::TypeName<hlj::Set<E>>::name =
+    format("Set<{}>", type_name<E>);
 
-template <typename F, typename S> struct hlj::detail::Type<hlj::Pair<F, S>> {
+template <typename F, typename S> struct hlj::TypeName<hlj::Pair<F, S>> {
   static const String name;
 };
 template <typename F, typename S>
-inline const hlj::String hlj::detail::Type<hlj::Pair<F, S>>::name =
-    hlj::format("Pair<{}, {}>", type_name<F>, type_name<S>);
+inline const hlj::String hlj::TypeName<hlj::Pair<F, S>>::name =
+    format("Pair<{}, {}>", type_name<F>, type_name<S>);
 
-template <typename K, typename V> struct hlj::detail::Type<hlj::Map<K, V>> {
+template <typename K, typename V> struct hlj::TypeName<hlj::Map<K, V>> {
   static const String name;
 };
 template <typename K, typename V>
-inline const hlj::String hlj::detail::Type<hlj::Map<K, V>>::name =
-    hlj::format("Map<{}, {}>", type_name<K>, type_name<V>);
+inline const hlj::String hlj::TypeName<hlj::Map<K, V>>::name =
+    format("Map<{}, {}>", type_name<K>, type_name<V>);
 
-template <typename... Ts> struct hlj::detail::Type<hlj::Tuple<Ts...>> {
+template <typename... Ts> struct hlj::TypeName<hlj::Tuple<Ts...>> {
   static const String name;
 };
 template <typename... Ts>
-inline const hlj::String hlj::detail::Type<hlj::Tuple<Ts...>>::name =
-    hlj::format("Tuple<{}>", join(", ", {type_name<Ts>...}));
+inline const hlj::String hlj::TypeName<hlj::Tuple<Ts...>>::name =
+    format("Tuple<{}>", join(", ", {type_name<Ts>...}));
 
-template <typename T> struct hlj::detail::Type<hlj::Optional<T>> {
+template <typename T> struct hlj::TypeName<hlj::Optional<T>> {
   static const String name;
 };
 template <typename T>
-inline const hlj::String hlj::detail::Type<hlj::Optional<T>>::name =
-    hlj::format("Optional<{}>", type_name<T>);
+inline const hlj::String hlj::TypeName<hlj::Optional<T>>::name =
+    format("Optional<{}>", type_name<T>);
 
 inline bool hlj::starts_with(const String &s, const String &p) {
   return (s.size() >= p.size()) && (s.substr(0, p.size()) == p);
@@ -568,6 +593,10 @@ inline bool hlj::starts_with(const String &s, const String &p) {
 
 inline bool hlj::ends_with(const String &s, const String &p) {
   return (s.size() >= p.size()) && (s.substr(s.size() - p.size()) == p);
+}
+
+template <typename T> inline hlj::String hlj::Type<T>::repr() const {
+  return format("type {}", name);
 }
 
 template <typename F, typename C, typename>
@@ -802,15 +831,22 @@ inline hlj::String hlj::str(const String &v) { return v; }
 
 inline hlj::String hlj::str(const StringView &v) { return String(v); }
 
+template <typename R>
+inline R hlj::Whatever::match(const Matcher<R> &type_results) {
+  return hlj::match<R, const TypeInfo &>(store->get_type_info())(type_results);
+}
+
+template <typename R>
+inline R hlj::Whatever::lazy_match(const LazyMatcher<R> &type_results) {
+  return match(type_results)();
+}
+
 inline hlj::Whatever::Store::~Store() {};
 
-template <typename T>
-inline const hlj::String hlj::Whatever::Concrete<T>::type_name =
-    hlj::type_name<T>;
-
 inline hlj::String hlj::Whatever::repr() const {
-  return store ? format("{} {}", store->get_type_name(), store->repr())
-               : "nothing";
+  return store
+             ? format("{} {}", store->get_type_info().get_name(), store->repr())
+             : "nothing";
 }
 
 inline void hlj::detail::format(SStream &ss, Index &i, const String &s) {
@@ -1022,17 +1058,17 @@ template <typename T>
 hlj::Match<T>::Match(Function<bool(const T &)> pred_) : pred(pred_) {}
 
 template <typename T>
-hlj::Match<T>::Match() : Match([](auto) { return false; }) {}
+hlj::Match<T>::Match() : Match([](const auto &) { return false; }) {}
 
 template <typename T>
 template <typename... Ts>
 hlj::Match<T>::Match(const T &match, const Ts &...rest)
-    : Match([match, rest_match = Match(rest...)](const T &value) {
+    : Match([&match, rest_match = Match(rest...)](const T &value) {
         return (value == match) || rest_match.match(value);
       }) {}
 
 template <typename T>
-hlj::Match<T>::Match(Any) : Match([](auto) { return true; }) {}
+hlj::Match<T>::Match(Any) : Match([](const auto &) { return true; }) {}
 
 template <typename T> bool hlj::Match<T>::match(const T &value) const {
   return pred(value);
@@ -1073,8 +1109,8 @@ hlj::Matcher<R, Ts...> hlj::match(const Ts &...values) {
 }
 
 template <typename R, typename... Ts>
-hlj::Matcher<hlj::Function<R()>, Ts...> hlj::match_do(const Ts &...values) {
-  return [&](const auto &pattern_actions) {
-    return match<Function<R()>>(values...)(pattern_actions)();
+hlj::Matcher<hlj::Function<R()>, Ts...> hlj::lazy_match(const Ts &...values) {
+  return [&](const auto &pattern_results) {
+    return match<Function<R()>>(values...)(pattern_results)();
   };
 }
