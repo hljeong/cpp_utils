@@ -5,7 +5,6 @@
 
 using namespace hlj;
 
-// todo: Whatever::match() and OneOf::match()
 // todo: has_signature<F, R(As...)>
 // todo: use a real test framework
 
@@ -73,39 +72,32 @@ static constexpr struct Nil {
 template <typename T> struct Cons;
 template <typename T> using ConsList = OneOf<Cons<T>, Nil>;
 template <typename T> struct Cons {
-  T value;
-  ConsList<T> rest;
+  T car;
+  ConsList<T> cdr;
 };
 
-template <typename T>
-ConsList<T> cons(const T &value, const ConsList<T> &rest) {
-  return Cons{value, rest};
+template <typename T> ConsList<T> cons(const T &car, const ConsList<T> &cdr) {
+  return Cons{car, cdr};
 }
 
 template <typename T> Cons(const T &, const ConsList<T> &) -> Cons<T>;
 
-template <typename T> const T &car(const ConsList<T> &list) {
-  if (list.template is<Nil>()) {
-    throw std::invalid_argument("empty list");
-  } else {
-    return list.template as<Cons<T>>().value;
-  }
+template <typename T> const T &car(const Cons<T> &cons) { return cons.car; }
+
+template <typename T> const ConsList<T> &cdr(const Cons<T> &cons) {
+  return cons.cdr;
 }
 
-template <typename T> const ConsList<T> &cdr(const ConsList<T> &list) {
-  if (list.template is<Nil>()) {
-    throw std::invalid_argument("empty list");
-  } else {
-    return list.template as<Cons<T>>().rest;
-  }
-}
-
+// todo: unwrap value
 template <typename T> String repr(const ConsList<T> &value) {
-  if (value.template is<Cons<T>>()) {
-    return format("cons({}, {})", repr(car(value)), cdr(value));
-  } else {
-    return "nil";
-  }
+  return value.template match<String>({
+      {type<Nil>, []() { return "nil"; }},
+      {type<Cons<T>>,
+       [&]() {
+         return format("cons({}, {})", repr(car(value.template as<Cons<T>>())),
+                       repr(cdr(value.template as<Cons<T>>())));
+       }},
+  });
 }
 
 int main() {
@@ -172,37 +164,42 @@ int main() {
 
   assert(repr(ns3::S5{S4{4}, 'x'}) == "S5(s=S4(y=4), h='x')");
 
-  Whatever::Matcher<int> matcher = {
-      {type<int>, 0},
-      {type<char>, 1},
-      {type<String>, 2},
-  };
+  Match<int> m = 3;
+  Pattern<int, char> pp(m, Match<char>{'c'});
 
-  x = 3;
-  assert(x.match(matcher) == 0);
+  assert(eager_match<int>(3, 'c')(
+             {{{1, 'a'}, 0}, {{1, 'b'}, 1}, {{2, any}, 2}, {{any, 'c'}, 3}}) ==
+         3);
 
-  x = 'c';
-  assert(x.match(matcher) == 1);
-
-  x = String{"hello"};
-  assert(x.match(matcher) == 2);
-
-  Whatever::LazyMatcher<String> lazy_matcher = {
+  Whatever::PatternMap<String> map = {
       {type<int>, [&]() { return repr(x); }},
       {type<char>, [&]() { return repr(y); }},
       {type<String>, []() { return "bye"; }},
       {any, []() { return "trash"; }},
   };
 
-  assert(x.lazy_match(lazy_matcher) == "bye");
-
   x = 6;
-  assert(x.lazy_match(lazy_matcher) == "int 6");
+  assert(x.match(map) == "int 6");
 
   x = 'f';
   y = String{"stolen"};
-  assert(x.lazy_match(lazy_matcher) == "String \"stolen\"");
+  assert(x.match(map) == "String \"stolen\"");
 
   x = 2.3;
-  assert(x.lazy_match(lazy_matcher) == "trash");
+  assert(x.match(map) == "trash");
+
+  Whatever::EagerPatternMap<int> eager_map = {
+      {type<int>, 0},
+      {type<char>, 1},
+      {type<String>, 2},
+  };
+
+  x = 3;
+  assert(x.eager_match(eager_map) == 0);
+
+  x = 'c';
+  assert(x.eager_match(eager_map) == 1);
+
+  x = String{"hello"};
+  assert(x.eager_match(eager_map) == 2);
 }

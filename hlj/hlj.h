@@ -13,6 +13,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <type_traits>
 #include <typeinfo>
 
 namespace hlj {
@@ -34,7 +35,9 @@ using StringView = std::string_view;
 using SStream = std::stringstream;
 using True = std::true_type;
 using False = std::false_type;
-template <typename T, typename U> using Same = std::is_same<T, U>;
+template <typename T, typename U> using IsSame = std::is_same<T, U>;
+template <typename T, typename U>
+static constexpr bool is_same = IsSame<T, U>::value;
 template <typename T> using Void = std::void_t<T>;
 using std::declval;
 template <typename E> using List = std::vector<E>;
@@ -144,7 +147,7 @@ inline namespace detail {
 template <typename T, typename> struct HasRepr : std::false_type {};
 template <typename T>
 struct HasRepr<T, Void<decltype(declval<T>().repr())>>
-    : Same<decltype(declval<T>().repr()), String> {};
+    : IsSame<decltype(declval<T>().repr()), String> {};
 } // namespace detail
 template <typename T> constexpr bool has_repr = detail::HasRepr<T, void>::value;
 
@@ -233,7 +236,7 @@ using hlj::repr;
 template <typename T, typename> struct Reprable : False {};
 template <typename T>
 struct Reprable<T, Void<decltype(repr(declval<T>()))>>
-    : Same<decltype(repr(declval<T>())), String> {};
+    : IsSame<decltype(repr(declval<T>())), String> {};
 } // namespace detail
 template <typename T>
 constexpr bool reprable = detail::Reprable<T, void>::value;
@@ -263,8 +266,11 @@ private:
 template <typename... Ts> class Pattern {
 public:
   Pattern(const Match<Ts> &...pattern_);
-  template <typename... Us, EnableIf<sizeof...(Ts) == 1> = true>
-  Pattern(const Us &...pattern_);
+  // todo: only do std::is_convertible_v on second pass?
+  template <typename T,
+            EnableIf<(sizeof...(Ts) == 1) &&
+                     std::is_convertible_v<T, nth<0, Ts...>>> = true>
+  Pattern(const T &pattern_) : pattern(Match<nth<0, Ts...>>(pattern_)) {}
   Pattern(Any);
 
   bool match(const Ts &...values) const;
@@ -279,20 +285,22 @@ private:
 };
 
 template <typename R, typename... Ts>
-using Matcher = Function<R(const List<Pair<Pattern<Ts...>, R>> &)>;
+using PatternMap = List<Pair<Pattern<Ts...>, Function<R()>>>;
 
-template <typename R = void, typename... Ts>
-Matcher<R, Ts...> match(const Ts &...values, const R &default_result);
+template <typename R, typename... Ts>
+using Matcher = Function<R(const PatternMap<R, Ts...> &)>;
+
+template <typename R, typename... Ts>
+using EagerPatternMap = List<Pair<Pattern<Ts...>, R>>;
+
+template <typename R, typename... Ts>
+using EagerMatcher = Function<R(const EagerPatternMap<R, Ts...> &)>;
 
 template <typename R = void, typename... Ts>
 Matcher<R, Ts...> match(const Ts &...values);
 
 template <typename R = void, typename... Ts>
-Matcher<Function<R()>, Ts...> match_do(const Ts &...values,
-                                       const R &default_result);
-
-template <typename R = void, typename... Ts>
-Matcher<Function<R()>, Ts...> lazy_match(const Ts &...values);
+EagerMatcher<R, Ts...> eager_match(const Ts &...values);
 
 // inspiration: https://gist.github.com/shoooe/9202235
 class Whatever {
@@ -323,12 +331,13 @@ public:
 
   String repr() const;
 
-  template <typename R>
-  using Matcher = List<Pair<Pattern<const TypeInfo &>, R>>;
-  template <typename R> R match(const Matcher<R> &type_results);
+  template <typename R> using PatternMap = PatternMap<R, const TypeInfo &>;
+  template <typename R> R match(const PatternMap<R> &type_results) const;
 
-  template <typename R> using LazyMatcher = Matcher<Function<R()>>;
-  template <typename R> R lazy_match(const LazyMatcher<R> &type_results);
+  template <typename R>
+  using EagerPatternMap = EagerPatternMap<R, const TypeInfo &>;
+  template <typename R>
+  R eager_match(const EagerPatternMap<R> &type_results) const;
 
 private:
   struct Store {
@@ -370,15 +379,27 @@ public:
     other.which = sizeof...(Ts);
   }
 
-  template <typename T, size_t I = index<T, Ts...>> bool is() const {
+  template <typename T, size_t I = index<T, Ts...>> inline bool is() const {
     return which == I;
   }
 
-  template <typename T, size_t = index<T, Ts...>> const T &as() const {
+  template <typename T, size_t = index<T, Ts...>> inline const T &as() const {
     return store.as<T>();
   }
 
-  String repr() const { return store.repr(); }
+  inline String repr() const { return store.repr(); }
+
+  // todo: put some more rigor into this, e.g. must have exactly sizeof...(Ts)
+  // entries
+  template <typename R>
+  R match(const Whatever::PatternMap<R> &type_results) const {
+    return store.match(type_results);
+  }
+
+  template <typename R>
+  inline R eager_match(const Whatever::EagerPatternMap<R> &type_results) const {
+    return store.eager_match(type_results);
+  }
 
 private:
   Whatever store;
@@ -832,13 +853,15 @@ inline hlj::String hlj::str(const String &v) { return v; }
 inline hlj::String hlj::str(const StringView &v) { return String(v); }
 
 template <typename R>
-inline R hlj::Whatever::match(const Matcher<R> &type_results) {
-  return hlj::match<R, const TypeInfo &>(store->get_type_info())(type_results);
+inline R hlj::Whatever::match(const PatternMap<R> &type_results) const {
+  return eager_match(type_results)();
 }
 
 template <typename R>
-inline R hlj::Whatever::lazy_match(const LazyMatcher<R> &type_results) {
-  return match(type_results)();
+inline R
+hlj::Whatever::eager_match(const EagerPatternMap<R> &type_results) const {
+  return hlj::eager_match<R, const TypeInfo &>(store->get_type_info())(
+      type_results);
 }
 
 inline hlj::Whatever::Store::~Store() {};
@@ -1078,11 +1101,6 @@ template <typename... Ts>
 hlj::Pattern<Ts...>::Pattern(const Match<Ts> &...pattern_)
     : pattern(std::make_tuple(pattern_...)) {}
 
-template <typename... Ts>
-template <typename... Us, hlj::EnableIf<sizeof...(Ts) == 1>>
-hlj::Pattern<Ts...>::Pattern(const Us &...pattern_)
-    : pattern(Match<nth<0, Ts...>>(pattern_...)) {}
-
 template <typename... Ts> hlj::Pattern<Ts...>::Pattern(Any) : match_any(true) {}
 
 template <typename... Ts>
@@ -1099,18 +1117,18 @@ bool hlj::Pattern<Ts...>::match(Seq<Is...>, const Ts &...args) const {
 template <typename R, typename... Ts>
 hlj::Matcher<R, Ts...> hlj::match(const Ts &...values) {
   return [&](const auto &pattern_results) {
+    return eager_match<Function<R()>>(values...)(pattern_results)();
+  };
+}
+
+template <typename R, typename... Ts>
+hlj::EagerMatcher<R, Ts...> hlj::eager_match(const Ts &...values) {
+  return [&](const auto &pattern_results) {
     for (const auto &[pattern, result] : pattern_results) {
       if (pattern.match(values...)) {
         return result;
       }
     }
     throw std::invalid_argument("no match");
-  };
-}
-
-template <typename R, typename... Ts>
-hlj::Matcher<hlj::Function<R()>, Ts...> hlj::lazy_match(const Ts &...values) {
-  return [&](const auto &pattern_results) {
-    return match<Function<R()>>(values...)(pattern_results)();
   };
 }
