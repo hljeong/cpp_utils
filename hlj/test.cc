@@ -1,5 +1,4 @@
 #include <cassert>
-#include <stdexcept>
 
 #include "hlj.h"
 
@@ -7,6 +6,46 @@ using namespace hlj;
 
 // todo: has_signature<F, R(As...)>
 // todo: use a real test framework
+
+String format_string(const String &s) {
+  if (in("\n", s)) {
+    return "\n---\n" + s + "\n---\n";
+  } else {
+    return "\"" + s + "\"";
+  }
+}
+
+void assert_eq(String value, const String &expected) {
+  if (value != expected) {
+    printf("expected: %s, got: %s\n", format_string(expected).c_str(),
+           format_string(value).c_str());
+  }
+  assert(value == expected);
+}
+
+template <typename T> void test_repr(T value, const String &expected) {
+  assert_eq(repr(value), expected);
+}
+
+template <size_t N>
+void test_repr(const char (&value)[N], const String &expected) {
+  assert_eq(repr(value), expected);
+}
+
+struct S {
+  struct T {
+    int x;
+  };
+
+  int y;
+  T t;
+};
+
+String repr(const S::T &value) { return format("{{.x = {}}}", value.x); }
+
+String repr(const S &value) {
+  return format("{{.y = {}, .t = {}}}", value.y, value.t);
+}
 
 static constexpr struct Unreprable {
 } unreprable;
@@ -114,6 +153,110 @@ int main() {
   assert(!starts_with("hi", "i"));
   assert(!starts_with("h", "hi"));
 
+  test_repr(3, "3");
+
+  test_repr('x', "'x'");
+
+  test_repr(static_cast<unsigned char>(2), "2");
+
+  test_repr(static_cast<signed char>(-2), "-2");
+
+  test_repr(static_cast<unsigned short>(300), "300");
+
+  test_repr(static_cast<short>(-300), "-300");
+
+  test_repr(true, "true");
+
+  test_repr(false, "false");
+
+  test_repr("hello literal", "\"hello literal\"");
+
+  test_repr(static_cast<const char *>("hello"), "\"hello\"");
+
+  test_repr(String{"world"}, "\"world\"");
+
+  test_repr(List<int>{2, 5, 0}, "[2, 5, 0]");
+
+  test_repr(List<String>{"a", "b", "c"}, "[\"a\", \"b\", \"c\"]");
+
+  test_repr(Tuple<>{}, "()");
+
+  test_repr(Tuple<u32, String>(2, "hi"), "(2, \"hi\")");
+
+  test_repr(nullopt, "nullopt");
+
+  test_repr<Optional<bool>>(nullopt, "nullopt");
+
+  test_repr(Tuple<Optional<u32>>(nullopt), "(nullopt)");
+
+  test_repr(Tuple<List<u32>>({{2}}), "([2])");
+
+  test_repr(
+      Tuple<List<i8>, Optional<bool>, String, u32>{
+          {-1, -2, 3, 4}, nullopt, "hi", 12},
+      "([-1, -2, 3, 4], nullopt, \"hi\", 12)");
+
+  test_repr(StringView("view"), "\"view\"");
+
+  test_repr(S{3, {4}}, "{.y = 3, .t = {.x = 4}}");
+
+  test_repr(Set<int>({1, 2, 3}), "{1, 2, 3}");
+
+  test_repr(Map<int, bool>({{1, true}, {2, false}, {3, true}}),
+            "{1 => true, 2 => false, 3 => true}");
+
+  test_repr(
+      List<List<char>>({{'a', 'b'}, {'c', 'd', 'e', 'f'}, {}, {'x', 'y', 'z'}}),
+      "[['a', 'b'], ['c', 'd', 'e', 'f'], [], ['x', 'y', 'z']]");
+
+  test_repr(List<S>({{2}, {.t = {4}}}),
+            "[{.y = 2, .t = {.x = 0}}, {.y = 0, .t = {.x = 4}}]");
+
+  {
+    List<S> value{{2}, {.t = {4}}};
+    assert_eq(format("{}", value), repr(value));
+  }
+
+  assert_eq(indent("hi"), "  hi");
+
+  assert_eq(indent("hi", {2}), "    hi");
+
+  // ...but why?
+  assert_eq(indent("hi", {.size = 3}), "   hi");
+
+  assert_eq(indent("lorem\nipsum\n"), "  lorem\n  ipsum\n");
+
+  assert_eq(bracket("1, 2, 3"), "[1, 2, 3]");
+
+  assert_eq(bracket("3, 4, 5", Bracket::Style::Spaced), "[ 3, 4, 5 ]");
+
+  assert_eq(angle_bracket("bra | ket", Bracket::Style::Spaced),
+            "< bra | ket >");
+
+  assert_eq(parenthesize("parenthesize(...)"), "(parenthesize(...))");
+
+  assert_eq(brace("printf(\"hello world\");", Bracket::Style::Block),
+            "{\n  printf(\"hello world\");\n}");
+
+  assert_eq(brace("printf(\"hello world\");", {.size = 3}),
+            "{\n   printf(\"hello world\");\n}");
+
+  assert_eq(brace("", {.size = 3}), "{}");
+
+  assert(join(", ", {"a", "b", "c"}) == "a, b, c");
+
+  assert(combine(Set<int>{1, 2, 3}, Set<int>{3, 4, 5}, Set<int>{5, 6, 7}) ==
+         Set<int>({1, 2, 3, 4, 5, 6, 7}));
+
+  assert(combine(List<int>{1, 2, 3}, List<int>{3, 4, 5}, List<int>{5, 6, 7}) ==
+         List<int>({1, 2, 3, 3, 4, 5, 5, 6, 7}));
+
+  assert(entries(Map<int, int>{{1, 2}, {3, 4}}) ==
+         (List<Entry<int, int>>{{1, 2}, {3, 4}}));
+
+  assert(combine(List<int>{1, 2, 3}, List<int>{3, 4, 5}) ==
+         List<int>({1, 2, 3, 3, 4, 5}));
+
   assert(type_name<int> == "int");
   assert(type_name<String> == "String");
   assert(type_name<List<int>> == "List<int>");
@@ -179,8 +322,19 @@ int main() {
 
   assert(repr(ns3::S5{S4{4}, 'x'}) == "S5(s=S4(y=4), h='x')");
 
-  Match<int> m = 3;
-  Pattern<int, char> pp(m, Match<char>{'c'});
+  assert(eager_match<bool>(0)({{0, true}, {{1}, false}, {any, false}}) == true);
+
+  assert(eager_match<bool>(1)({{{0, 1, 2}, true}, {{3, 4, 5}, false}}) == true);
+
+  assert(eager_match<bool>(3)({{{0, 1, 2}, true}, {{3, 4, 5}, false}}) ==
+         false);
+
+  assert(eager_match<int>('b', 2)(
+             {{{'a', any}, 0}, {{'b', {0, 1}}, 1}, {{any, 2}, 2}}) == 2);
+
+  assert(eager_match<int>(String{"b"}, 2)({{{String{"a"}, any}, 0},
+                                           {{String{"b"}, {0, 1}}, 1},
+                                           {{any, 2}, 2}}) == 2);
 
   assert(eager_match<int>(3, 'c')(
              {{{1, 'a'}, 0}, {{1, 'b'}, 1}, {{2, any}, 2}, {{any, 'c'}, 3}}) ==

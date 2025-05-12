@@ -51,6 +51,7 @@ template <typename F, typename S> using Pair = std::pair<F, S>;
 using std::make_pair;
 template <typename K, typename V> using Map = std::map<K, V>;
 template <typename... Es> using Tuple = std::tuple<Es...>;
+using std::make_tuple;
 template <typename T> using Optional = std::optional<T>;
 using NullOpt = std::nullopt_t;
 using std::nullopt;
@@ -198,9 +199,8 @@ template <typename E> void assign(Set<E> &s1, const Set<E> &s2);
 template <typename E> void assign(List<E> &l1, const List<E> &l2);
 template <typename K, typename V>
 void assign(Map<K, V> &m1, const Map<K, V> &m2);
-template <typename C> C combine(const C &c1, const C &c2);
 template <typename C, typename... Cs>
-C combine(const C &first, const C &second, const Cs &...rest);
+C combine(const C &first, const Cs &...rest);
 template <typename E> Set<E> intersection(const Set<E> &s1, const Set<E> &s2);
 template <typename E> bool disjoint(const Set<E> &s1, const Set<E> &s2);
 template <typename K, typename V> Set<K> keys(const Map<K, V> &m);
@@ -278,14 +278,18 @@ private:
 
 template <typename... Ts> class Pattern {
 public:
-  Pattern(const Match<Ts> &...pattern_);
-  // todo: only do is_convertible on second pass?
-  template <typename T, EnableIf<(sizeof...(Ts) == 1) &&
-                                 is_convertible<T, nth<0, Ts...>>> = true>
-  Pattern(const T &pattern_) : pattern(Match<nth<0, Ts...>>(pattern_)) {}
-  Pattern(Any);
+  Pattern(const Match<Ts> &...pattern_) : pattern{make_tuple(pattern_...)} {}
 
-  bool match(const Ts &...values) const;
+  template <typename... Us,
+            EnableIf<(sizeof...(Ts) == 1) &&
+                     (is_convertible<Us, nth<0, Ts...>> && ...)> = true>
+  Pattern(const Us &...values) : Pattern{Match<nth<0, Ts...>>{values...}} {}
+
+  Pattern(Any) : match_any{true} {}
+
+  inline bool match(const Ts &...values) const {
+    return match(SeqFor<Ts...>, values...);
+  }
 
 private:
   Tuple<Match<Ts>...> pattern;
@@ -293,7 +297,10 @@ private:
   // todo: ugly
   bool match_any = false;
 
-  template <Index... Is> bool match(Seq<Is...>, const Ts &...args) const;
+  template <Index... Is>
+  inline bool match(Seq<Is...>, const Ts &...args) const {
+    return match_any || (Get<Is>(pattern).match(args) && ...);
+  }
 };
 
 template <typename R, typename... Ts>
@@ -309,10 +316,23 @@ template <typename R, typename... Ts>
 using EagerMatcher = Function<R(const EagerPatternMap<R, Ts...> &)>;
 
 template <typename R = void, typename... Ts>
-Matcher<R, Ts...> match(const Ts &...values);
+inline EagerMatcher<R, Ts...> eager_match(const Ts &...values) {
+  return [&](const auto &pattern_map) {
+    for (const auto &[pattern, result] : pattern_map) {
+      if (pattern.match(values...)) {
+        return result;
+      }
+    }
+    throw std::invalid_argument("no match");
+  };
+}
 
 template <typename R = void, typename... Ts>
-EagerMatcher<R, Ts...> eager_match(const Ts &...values);
+inline Matcher<R, Ts...> match(const Ts &...values) {
+  return [&](const auto &pattern_map) {
+    return eager_match<Function<R()>>(values...)(pattern_map)();
+  };
+}
 
 // inspiration: https://gist.github.com/shoooe/9202235
 class Whatever {
@@ -707,7 +727,7 @@ template <typename E> inline void hlj::assign(Set<E> &s1, const Set<E> &s2) {
 
 template <typename E> inline void hlj::assign(List<E> &l1, const List<E> &l2) {
   for (const auto &e : l2) {
-    l1.push_back(l2);
+    l1.push_back(e);
   }
 }
 
@@ -718,15 +738,11 @@ inline void hlj::assign(Map<K, V> &m1, const Map<K, V> &m2) {
   }
 }
 
-template <typename C> inline C hlj::combine(const C &c1, const C &c2) {
-  C r{c1};
-  assign(r, c2);
-  return r;
-}
-
 template <typename C, typename... Cs>
-C hlj::combine(const C &first, const C &second, const Cs &...rest) {
-  return combine(combine(first, second), rest...);
+C hlj::combine(const C &first, const Cs &...rest) {
+  C r{first};
+  (assign(r, rest), ...);
+  return r;
 }
 
 template <typename E>
@@ -1134,40 +1150,4 @@ hlj::Match<T>::Match(Any) : Match([](const auto &) { return true; }) {}
 
 template <typename T> bool hlj::Match<T>::match(const T &value) const {
   return pred(value);
-}
-
-template <typename... Ts>
-hlj::Pattern<Ts...>::Pattern(const Match<Ts> &...pattern_)
-    : pattern(std::make_tuple(pattern_...)) {}
-
-template <typename... Ts> hlj::Pattern<Ts...>::Pattern(Any) : match_any(true) {}
-
-template <typename... Ts>
-bool hlj::Pattern<Ts...>::match(const Ts &...values) const {
-  return match(SeqFor<Ts...>, values...);
-}
-
-template <typename... Ts>
-template <hlj::Index... Is>
-bool hlj::Pattern<Ts...>::match(Seq<Is...>, const Ts &...args) const {
-  return match_any || (Get<Is>(pattern).match(args) && ...);
-}
-
-template <typename R, typename... Ts>
-hlj::Matcher<R, Ts...> hlj::match(const Ts &...values) {
-  return [&](const auto &pattern_results) {
-    return eager_match<Function<R()>>(values...)(pattern_results)();
-  };
-}
-
-template <typename R, typename... Ts>
-hlj::EagerMatcher<R, Ts...> hlj::eager_match(const Ts &...values) {
-  return [&](const auto &pattern_results) {
-    for (const auto &[pattern, result] : pattern_results) {
-      if (pattern.match(values...)) {
-        return result;
-      }
-    }
-    throw std::invalid_argument("no match");
-  };
 }
