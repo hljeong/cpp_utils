@@ -371,4 +371,11 @@ int main() {
 
   x = String{"hello"};
   assert(x.eager_match(eager_map) == 2);
+
+  // comparable OneOf
+  Map<OneOf<int, char>, int> m;
+  m[3] = 2;
+  m['x'] = 3;
+  assert(m[3] == 2);
+  assert(m['x'] == 3);
 }

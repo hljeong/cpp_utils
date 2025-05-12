@@ -11,6 +11,7 @@
 #include <ratio>
 #include <set>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <type_traits>
@@ -164,6 +165,15 @@ struct HasEquals<T, Void<decltype(declval<const T>() == declval<const T>())>>
 } // namespace detail
 template <typename T>
 constexpr bool has_equals = detail::HasEquals<T, void>::value;
+
+inline namespace detail {
+template <typename T, typename> struct HasLessThan : std::false_type {};
+template <typename T>
+struct HasLessThan<T, Void<decltype(declval<const T>() < declval<const T>())>>
+    : IsSame<decltype(declval<const T>() < declval<const T>()), bool> {};
+} // namespace detail
+template <typename T>
+constexpr bool has_less_than = detail::HasLessThan<T, void>::value;
 
 // see: https://en.cppreference.com/w/cpp/utility/variant/visit
 template <typename... Ts> struct Overloads : Ts... {
@@ -361,6 +371,10 @@ public:
     return store ? store->equals(*other.store) : !other.store;
   }
 
+  inline bool operator<(const Whatever &other) const {
+    return store ? store->less_than(*other.store) : !other.store;
+  }
+
   template <typename T> inline const T &as() const { return store->as<T>(); }
 
   String repr() const;
@@ -380,14 +394,13 @@ private:
     virtual const TypeInfo &get_type_info() const = 0;
     virtual String repr() const = 0;
     virtual bool equals(const Store &other) const = 0;
+    virtual bool less_than(const Store &other) const = 0;
 
     template <typename T> inline bool is() const {
       return get_type_info() == type_info<T>;
     }
 
-    template <typename T> inline const T &as() const {
-      return dynamic_cast<const Concrete<T> &>(*this).value;
-    }
+    template <typename T> const T &as() const;
   };
 
   template <typename T> struct Concrete : Store {
@@ -398,6 +411,7 @@ private:
     UPtr<Store> copy() const final { return make_unique<Concrete<T>>(value); }
     const TypeInfo &get_type_info() const final { return type_info<T>; }
     String repr() const final { return always_repr(value); }
+
     bool equals(const Store &other) const final {
       if (!other.is<T>()) {
         return false;
@@ -409,6 +423,8 @@ private:
         return &value == &other_value;
       }
     }
+
+    bool less_than(const Store &other) const final;
   };
 
   UPtr<Store> store;
@@ -434,6 +450,11 @@ public:
   }
 
   bool operator==(const OneOf &other) const { return store == other.store; }
+
+  bool operator<(const OneOf &other) const {
+    return (which < other.which) ||
+           ((which == other.which) && (store < other.store));
+  }
 
   template <typename T, size_t I = index<T, Ts...>> inline bool is() const {
     return which == I;
@@ -1150,4 +1171,23 @@ hlj::Match<T>::Match(Any) : Match([](const auto &) { return true; }) {}
 
 template <typename T> bool hlj::Match<T>::match(const T &value) const {
   return pred(value);
+}
+
+template <typename T> inline const T &hlj::Whatever::Store::as() const {
+  if (!is<T>()) {
+    throw std::invalid_argument(
+        format("cannot cast {} to type {}", *this, type_name<T>));
+  }
+  return dynamic_cast<const Concrete<T> &>(*this).value;
+}
+
+template <typename T>
+inline bool hlj::Whatever::Concrete<T>::less_than(const Store &other) const {
+  const T &other_value = other.as<T>();
+  if constexpr (has_less_than<T>) {
+    return value < other_value;
+  } else {
+    throw std::invalid_argument(
+        format("cannot compare between objects of type {}", type_name<T>));
+  }
 }
