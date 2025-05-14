@@ -307,6 +307,7 @@ int main() {
 
   OneOf<int, char> p = 3;
   auto q = p;
+  assert(q.type_name() == "int");
   assert(repr(q) == "int 3");
 
   auto r = std::move(p);

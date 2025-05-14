@@ -389,6 +389,9 @@ public:
 
   template <typename T> inline const T &as() const { return store->as<T>(); }
 
+  String type_name() const {
+    return store ? store->get_type_info().get_name() : "nothing";
+  }
   String repr() const;
   String str() const;
 
@@ -477,8 +480,8 @@ public:
     return store.as<T>();
   }
 
+  inline String type_name() const { return store.type_name(); }
   inline String repr() const { return store.repr(); }
-
   inline String str() const { return store.str(); }
 
   template <typename T> struct Required : T {
@@ -1190,7 +1193,7 @@ template <typename T> bool hlj::Match<T>::match(const T &value) const {
 template <typename T> inline const T &hlj::Whatever::Store::as() const {
   if (!is<T>()) {
     throw std::invalid_argument(
-        format("cannot cast {} to type {}", *this, type_name<T>));
+        format("cannot cast {} to type {}", *this, hlj::type_name<T>));
   }
   return dynamic_cast<const Concrete<T> &>(*this).value;
 }
@@ -1202,6 +1205,6 @@ inline bool hlj::Whatever::Concrete<T>::less_than(const Store &other) const {
     return value < other_value;
   } else {
     throw std::invalid_argument(
-        format("cannot compare between objects of type {}", type_name<T>));
+        format("cannot compare between objects of type {}", hlj::type_name<T>));
   }
 }
