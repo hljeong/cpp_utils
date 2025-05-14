@@ -390,6 +390,7 @@ public:
   template <typename T> inline const T &as() const { return store->as<T>(); }
 
   String repr() const;
+  String str() const;
 
   template <typename R> using PatternMap = PatternMap<R, const TypeInfo &>;
   template <typename R> R match(const PatternMap<R> &type_results) const;
@@ -477,6 +478,8 @@ public:
   }
 
   inline String repr() const { return store.repr(); }
+
+  inline String str() const { return store.str(); }
 
   template <typename T> struct Required : T {
     Required() = delete;
@@ -953,6 +956,10 @@ inline hlj::String hlj::Whatever::repr() const {
   return store
              ? format("{} {}", store->get_type_info().get_name(), store->repr())
              : "nothing";
+}
+
+inline hlj::String hlj::Whatever::str() const {
+  return store ? store->repr() : "nothing";
 }
 
 inline void hlj::detail::format(SStream &ss, Index &i, const String &s) {

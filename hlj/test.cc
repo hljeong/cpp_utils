@@ -4,6 +4,8 @@
 
 using namespace hlj;
 
+using hlj::repr;
+
 // todo: has_signature<F, R(As...)>
 // todo: use a real test framework
 
@@ -65,7 +67,7 @@ struct S2 {
 };
 
 String repr(S2 value) {
-  return format("S2(s={}, c={})", repr(value.s), hlj::repr(value.c));
+  return format("S2(s={}, c={})", repr(value.s), ::repr(value.c));
 };
 
 } // namespace ns1
@@ -98,7 +100,7 @@ struct S5 {
 
   String repr() const {
     // using namespace hlj; // this would not resolve the repr()'s
-    using hlj::repr;
+    using ::repr;
     return format("S5(s={}, h={})", repr(s), repr(h));
   }
 };
@@ -117,6 +119,8 @@ template <typename T> struct Cons {
   T car;
   ConsList<T> cdr;
 
+  String repr() const { return format("cons({}, {})", ::repr(car), cdr); }
+
   bool operator==(const Cons<T> &other) const {
     return (car == other.car) && (cdr == other.cdr);
   }
@@ -127,15 +131,6 @@ template <typename T> ConsList<T> cons(const T &car, const ConsList<T> &cdr) {
 }
 
 template <typename T> Cons(const T &, const ConsList<T> &) -> Cons<T>;
-
-template <typename T> String repr(const ConsList<T> &value) {
-  return value.template match<String>({
-      [](const Cons<T> &cons) {
-        return format("cons({}, {})", repr(cons.car), cons.cdr);
-      },
-      [](Nil) { return "nil"; },
-  });
-}
 
 template <typename T> Optional<T> last(const ConsList<T> &list) {
   return list.template match<Optional<T>>({
@@ -299,9 +294,9 @@ int main() {
 
   assert(str(unreprable) == "blasphemy");
 
-  assert(repr(cons(1, cons(2, {nil}))) == "cons(1, cons(2, nil))");
+  assert(str(cons(1, cons(2, {nil}))) == "cons(1, cons(2, nil))");
 
-  assert(repr(cons(String{"hello"}, cons(String{"world"}, {nil}))) ==
+  assert(str(cons(String{"hello"}, cons(String{"world"}, {nil}))) ==
          "cons(\"hello\", cons(\"world\", nil))");
 
   auto le = last(cons(1, cons(2, {nil})));
