@@ -48,6 +48,7 @@ String repr(const S &value) {
 }
 
 static constexpr struct Unreprable {
+  String str() const { return "blasphemy"; }
 } unreprable;
 
 struct S1 {
@@ -295,6 +296,8 @@ int main() {
 
   assert(always_repr(unreprable) == "<Unreprable>");
   assert(repr(Whatever{unreprable}) == "Unreprable <Unreprable>");
+
+  assert(str(unreprable) == "blasphemy");
 
   assert(repr(cons(1, cons(2, {nil}))) == "cons(1, cons(2, nil))");
 

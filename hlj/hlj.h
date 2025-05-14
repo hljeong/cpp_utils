@@ -158,6 +158,14 @@ struct HasRepr<T, Void<decltype(declval<const T>().repr())>>
 template <typename T> constexpr bool has_repr = detail::HasRepr<T, void>::value;
 
 inline namespace detail {
+template <typename T, typename> struct HasStr : std::false_type {};
+template <typename T>
+struct HasStr<T, Void<decltype(declval<const T>().str())>>
+    : IsSame<decltype(declval<const T>().str()), String> {};
+} // namespace detail
+template <typename T> constexpr bool has_str = detail::HasStr<T, void>::value;
+
+inline namespace detail {
 template <typename T, typename> struct HasEquals : std::false_type {};
 template <typename T>
 struct HasEquals<T, Void<decltype(declval<const T>() == declval<const T>())>>
@@ -223,7 +231,6 @@ bool in(const String &p, const String &s);
 template <typename T> String always_repr(const T &v);
 template <typename T, EnableIf<has_repr<T>> = true>
 inline String repr(const T &v) {
-  // clangd is not happy with defining this out-of-line
   return v.repr();
 }
 String repr(char v);
@@ -264,7 +271,12 @@ struct Reprable<T, Void<decltype(repr(declval<T>()))>>
 template <typename T>
 constexpr bool reprable = detail::Reprable<T, void>::value;
 
-template <typename T> String str(const T &v);
+template <typename T, EnableIf<has_str<T>> = true> String str(const T &v) {
+  return v.str();
+}
+template <typename T, EnableIf<!has_str<T>> = true> String str(const T &v) {
+  return repr(v);
+}
 String str(char v);
 String str(const char *v);
 String str(const String &v);
@@ -913,10 +925,6 @@ template <typename... Ts> inline hlj::String hlj::repr(const Tuple<Ts...> &v) {
   };
 
   return std::apply(repr_, v);
-}
-
-template <typename T> inline hlj::String hlj::str(const T &v) {
-  return repr(v);
 }
 
 inline hlj::String hlj::str(char v) { return String{v}; }
