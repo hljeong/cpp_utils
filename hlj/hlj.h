@@ -493,12 +493,11 @@ void format(SStream &ss, Index &i, const String &s, const T &v0,
             const Ts &...vs);
 } // namespace detail
 template <typename... Ts> String format(const String &s, const Ts &...vs);
-// todo: format(const Ts &...) possible?
-template <typename... Ts> String formato(const Ts &...vs);
+template <typename... Ts> String oformat(const Ts &...vs);
 
 void print();
-template <typename... Ts> void print(const String &s, const Ts &...vs);
-template <typename... Ts> void printo(const Ts &...vs);
+template <typename... Ts> void print(const Ts &...vs);
+template <typename... Ts> void fprint(const String &s, const Ts &...vs);
 
 struct Indent {
   Index stop = 1;
@@ -1032,19 +1031,19 @@ inline hlj::String hlj::format(const String &s, const Ts &...vs) {
   return ss.str();
 }
 
-template <typename... Ts> inline hlj::String hlj::formato(const Ts &...vs) {
+template <typename... Ts> inline hlj::String hlj::oformat(const Ts &...vs) {
   return format(join(" ", repeat(sizeof...(Ts), "{}")), vs...);
 }
 
 inline void hlj::print() { printf("\n"); }
 
-template <typename... Ts>
-inline void hlj::print(const String &s, const Ts &...vs) {
-  printf("%s\n", format(s, vs...).c_str());
+template <typename... Ts> inline void hlj::print(const Ts &...vs) {
+  printf("%s\n", oformat(vs...).c_str());
 }
 
-template <typename... Ts> inline void hlj::printo(const Ts &...vs) {
-  printf("%s\n", formato(vs...).c_str());
+template <typename... Ts>
+inline void hlj::fprint(const String &s, const Ts &...vs) {
+  printf("%s\n", format(s, vs...).c_str());
 }
 
 inline hlj::String hlj::Indent::apply(const String &s) const {

@@ -267,7 +267,7 @@ int main() {
   assert(type_name<Abomination> ==
          "Tuple<int, char, List<Pair<Map<String, Tuple<>>, Optional<bool>>>>");
 
-  assert(formato(3, "hello", repr('w'), 'd') == "3 hello 'w' d");
+  assert(oformat(3, "hello", repr('w'), 'd') == "3 hello 'w' d");
 
   Whatever x = List<int>{1};
   assert(repr(x) == "List<int> [1]");
@@ -275,7 +275,7 @@ int main() {
   x = Abomination{
       17, 'g', {{{{"lorem", {}}, {"ipsum", {}}, {"pachamama", {}}}, nullopt}}};
   // note the orderedness
-  assert(repr(x) == formato(type_name<Abomination>,
+  assert(repr(x) == oformat(type_name<Abomination>,
                             "(17, 'g', [({\"ipsum\" => (), \"lorem\" => (), "
                             "\"pachamama\" => ()}, nullopt)])"));
 

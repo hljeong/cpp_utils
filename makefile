@@ -16,5 +16,6 @@ update: git-submodule-update
 test:
 	@ ${CC} hlj/test.cc
 	@ ./a.out
+	@ echo all tests passed
 
 include makefile_utils/git.mk
